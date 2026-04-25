@@ -2,6 +2,7 @@ import json
 import os
 
 DOSYA = "tasks.json"
+GECERLI_ONCELIKLER = ["dusuk", "normal", "yuksek"]
 
 
 def gorevleri_yukle():
@@ -18,13 +19,16 @@ def gorevleri_kaydet(gorevler):
         json.dump(gorevler, f, ensure_ascii=False, indent=2)
 
 
-def gorev_ekle(baslik):
+def gorev_ekle(baslik, oncelik="normal"):
     """Yeni görev ekle ve kaydet."""
+    if oncelik not in GECERLI_ONCELIKLER:
+        raise ValueError(f"Geçersiz öncelik: '{oncelik}'. Seçenekler: {GECERLI_ONCELIKLER}")
     gorevler = gorevleri_yukle()
     yeni_id = len(gorevler) + 1
     yeni_gorev = {
         "id": yeni_id,
         "baslik": baslik,
+        "oncelik": oncelik,
         "tamamlandi": False
     }
     gorevler.append(yeni_gorev)

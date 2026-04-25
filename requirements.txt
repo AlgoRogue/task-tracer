@@ -1,3 +1,1 @@
-# Bu proje dış kütüphane kullanmıyor.
-# İleride kütüphane eklenirse buraya yazılır.
-# Örnek: requests==2.31.0
+pytest==9.0.3
