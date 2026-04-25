@@ -21,9 +21,9 @@ def arsivi_goster():
         return
     print("\n--- ARŞİV ---")
     for g in arsiv:
-        durum_etiketi = "tamamlandı" if g.get("durum") == "tamamlandi" else "arşivlendi"
-        tarih = g.get("arsivlenme") or g.get("tamamlanma") or "-"
-        print(f"  ID:{g['id']}  {g['baslik']}  [{durum_etiketi}]  {tarih}")
+        durum = "✓" if g.get("tamamlanma") else "○"
+        tarih = g.get("arsivlenme", "-")
+        print(f"  [{durum}] ID:{g['id']}  {g['baslik']}  [{g.get('oncelik','normal')}]  {tarih}")
     print()
 
 
