@@ -1,15 +1,44 @@
 import json
 import os
+from datetime import datetime
 
 # Her zaman bu script'in bulunduğu klasördeki tasks.json'u kullan
-# Böylece hangi dizinden çalıştırılırsa çalıştırılsın aynı dosyayı bulur
 _KLASOR = os.path.dirname(os.path.abspath(__file__))
 DOSYA = os.path.join(_KLASOR, "tasks.json")
+
 GECERLI_ONCELIKLER = ["dusuk", "normal", "yuksek"]
 
 
+def _simdi():
+    return datetime.now().isoformat(timespec="seconds")
+
+
 def gorevleri_yukle():
-    """Dosyadan görevleri oku. Dosya yoksa veya bozuksa boş liste döndür."""
+    """Aktif ve tamamlanmış görevleri döndür (arşivlenenler hariç)."""
+    if not os.path.exists(DOSYA):
+        return []
+    with open(DOSYA, "r", encoding="utf-8") as f:
+        try:
+            gorevler = json.load(f)
+        except json.JSONDecodeError:
+            return []
+    return [g for g in gorevler if g.get("durum", "aktif") != "arsivlendi"]
+
+
+def arsivi_yukle():
+    """Sadece arşivlenmiş görevleri döndür."""
+    if not os.path.exists(DOSYA):
+        return []
+    with open(DOSYA, "r", encoding="utf-8") as f:
+        try:
+            gorevler = json.load(f)
+        except json.JSONDecodeError:
+            return []
+    return [g for g in gorevler if g.get("durum") == "arsivlendi"]
+
+
+def _tum_gorevleri_yukle():
+    """Tüm görevleri döndür (iç kullanım için)."""
     if not os.path.exists(DOSYA):
         return []
     with open(DOSYA, "r", encoding="utf-8") as f:
@@ -19,8 +48,7 @@ def gorevleri_yukle():
             return []
 
 
-def gorevleri_kaydet(gorevler):
-    """Görev listesini dosyaya yaz."""
+def _tum_gorevleri_kaydet(gorevler):
     with open(DOSYA, "w", encoding="utf-8") as f:
         json.dump(gorevler, f, ensure_ascii=False, indent=2)
 
@@ -33,35 +61,44 @@ def gorev_ekle(baslik, oncelik="normal"):
         raise ValueError("Görev başlığı 200 karakterden uzun olamaz.")
     if oncelik not in GECERLI_ONCELIKLER:
         raise ValueError(f"Geçersiz öncelik: '{oncelik}'. Seçenekler: {GECERLI_ONCELIKLER}")
-    gorevler = gorevleri_yukle()
+    gorevler = _tum_gorevleri_yukle()
     yeni_id = max((g["id"] for g in gorevler), default=0) + 1
     yeni_gorev = {
         "id": yeni_id,
         "baslik": baslik,
         "oncelik": oncelik,
-        "tamamlandi": False
+        "durum": "aktif",
+        "olusturulma": _simdi(),
+        "tamamlanma": None,
+        "arsivlenme": None,
     }
     gorevler.append(yeni_gorev)
-    gorevleri_kaydet(gorevler)
+    _tum_gorevleri_kaydet(gorevler)
     return yeni_gorev
 
 
 def gorev_tamamla(gorev_id):
     """Görevi tamamlandı olarak işaretle."""
-    gorevler = gorevleri_yukle()
+    gorevler = _tum_gorevleri_yukle()
     for gorev in gorevler:
         if gorev["id"] == gorev_id:
+            gorev["durum"] = "tamamlandi"
             gorev["tamamlandi"] = True
-            gorevleri_kaydet(gorevler)
+            gorev.setdefault("tamamlanma", None)
+            gorev["tamamlanma"] = _simdi()
+            _tum_gorevleri_kaydet(gorevler)
             return True
-    return False  # Görev bulunamadı
+    return False
 
 
-def gorev_sil(gorev_id):
-    """Görevi listeden çıkar."""
-    gorevler = gorevleri_yukle()
-    yeni_liste = [g for g in gorevler if g["id"] != gorev_id]
-    if len(yeni_liste) == len(gorevler):
-        return False  # Silinecek görev bulunamadı
-    gorevleri_kaydet(yeni_liste)
-    return True
+def gorev_arsivle(gorev_id):
+    """Görevi arşivle (soft delete)."""
+    gorevler = _tum_gorevleri_yukle()
+    for gorev in gorevler:
+        if gorev["id"] == gorev_id:
+            gorev["durum"] = "arsivlendi"
+            gorev.setdefault("arsivlenme", None)
+            gorev["arsivlenme"] = _simdi()
+            _tum_gorevleri_kaydet(gorevler)
+            return True
+    return False
