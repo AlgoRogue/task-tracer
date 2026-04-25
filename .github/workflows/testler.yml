@@ -1,0 +1,27 @@
+name: Testleri Çalıştır
+
+# Ne zaman çalışsın?
+on:
+  push:
+    branches: [main]       # main'e her push'ta
+  pull_request:
+    branches: [main]       # main'e açılan her PR'da
+
+jobs:
+  test:
+    runs-on: ubuntu-latest  # GitHub'ın Linux sunucusunda çalış
+
+    steps:
+      - name: Kodu indir
+        uses: actions/checkout@v4
+
+      - name: Python kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Bağımlılıkları yükle
+        run: pip install -r requirements.txt
+
+      - name: Testleri çalıştır
+        run: pytest test_tasks.py -v
