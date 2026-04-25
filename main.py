@@ -1,4 +1,4 @@
-from tasks import gorev_ekle, gorev_tamamla, gorev_arsivle, gorevleri_yukle, arsivi_yukle
+from tasks import gorev_ekle, gorev_tamamla, gorev_arsivle, gorev_aktife_al, gorevleri_yukle, arsivi_yukle
 
 
 def sira_no_to_id(sira_no):
@@ -35,6 +35,22 @@ def arsivi_goster():
     print()
 
 
+def aktif_olmayan_gorevleri_goster():
+    """Tamamlanmış ve arşivlenmiş görevleri numaralı listeler."""
+    tamamlananlar = [g for g in gorevleri_yukle() if g.get("durum") == "tamamlandi"]
+    arsivlenenler = arsivi_yukle()
+    liste = tamamlananlar + arsivlenenler
+    if not liste:
+        print("Aktife alınabilecek görev yok.")
+        return []
+    print("\n--- AKTİFE ALINABİLECEK GÖREVLER ---")
+    for sira, g in enumerate(liste, start=1):
+        etiket = "tamamlandı" if g.get("durum") == "tamamlandi" else "arşivlendi"
+        print(f"  {sira}. {g['baslik']}  [{etiket}]")
+    print()
+    return liste
+
+
 def menu():
     print("\n=== GÖREV YÖNETİCİSİ ===")
     print("1. Görev ekle")
@@ -42,6 +58,7 @@ def menu():
     print("3. Görevi arşivle")
     print("4. Görevleri listele")
     print("5. Arşivi görüntüle")
+    print("6. Görevi aktife al")
     print("0. Çıkış")
     return input("Seçim: ").strip()
 
@@ -65,10 +82,14 @@ def main():
             try:
                 sira = int(input("Tamamlanacak görev sıra no: "))
                 gorev_id = sira_no_to_id(sira)
-                if gorev_id and gorev_tamamla(gorev_id):
-                    print("Görev tamamlandı!")
-                else:
+                if not gorev_id:
                     print("Geçersiz sıra numarası.")
+                else:
+                    gorev = gorevleri_yukle()[sira - 1]
+                    if gorev.get("durum") == "tamamlandi":
+                        print("Bu görev zaten tamamlanmış.")
+                    elif gorev_tamamla(gorev_id):
+                        print("Görev tamamlandı!")
             except ValueError:
                 print("Geçersiz giriş.")
 
@@ -89,6 +110,20 @@ def main():
 
         elif secim == "5":
             arsivi_goster()
+
+        elif secim == "6":
+            liste = aktif_olmayan_gorevleri_goster()
+            if liste:
+                try:
+                    sira = int(input("Aktife alınacak görev sıra no: "))
+                    if 1 <= sira <= len(liste):
+                        gorev_id = liste[sira - 1]["id"]
+                        if gorev_aktife_al(gorev_id):
+                            print("Görev aktife alındı.")
+                    else:
+                        print("Geçersiz sıra numarası.")
+                except ValueError:
+                    print("Geçersiz giriş.")
 
         elif secim == "0":
             print("Görüşürüz!")

@@ -102,3 +102,16 @@ def gorev_arsivle(gorev_id):
             _tum_gorevleri_kaydet(gorevler)
             return True
     return False
+
+
+def gorev_aktife_al(gorev_id):
+    """Tamamlanmış veya arşivlenmiş görevi tekrar aktife çeker."""
+    gorevler = _tum_gorevleri_yukle()
+    for gorev in gorevler:
+        if gorev["id"] == gorev_id:
+            gorev["durum"] = "aktif"
+            gorev["tamamlanma"] = None
+            gorev["arsivlenme"] = None
+            _tum_gorevleri_kaydet(gorevler)
+            return True
+    return False
