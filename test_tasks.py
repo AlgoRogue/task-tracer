@@ -1,14 +1,12 @@
 import os
-import json
 import pytest
-from tasks import gorev_ekle, gorev_tamamla, gorev_arsivle, gorev_aktife_al, gorevleri_yukle, arsivi_yukle, DOSYA
+from tasks import gorev_ekle, gorev_tamamla, gorev_arsivle, gorev_aktife_al, gorevleri_yukle, arsivi_yukle, DB
 
 
-# Her testten önce tasks.json'u temizle
-# Böylece testler birbirini etkilemez
+# Her testten önce veritabanını temizle
 def setup_function():
-    if os.path.exists(DOSYA):
-        os.remove(DOSYA)
+    if os.path.exists(DB):
+        os.remove(DB)
 
 
 # --- gorev_ekle testleri ---
@@ -44,7 +42,7 @@ def test_gorev_tamamla_basarili():
     sonuc = gorev_tamamla(gorev["id"])
     assert sonuc == True
     gorevler = gorevleri_yukle()
-    assert gorevler[0]["tamamlandi"] == True
+    assert gorevler[0]["durum"] == "tamamlandi"
 
 
 def test_gorev_tamamla_olmayan_id():
@@ -120,25 +118,23 @@ def test_arsivlenen_gorev_tarih_dolu():
     arsiv = arsivi_yukle()
     assert arsiv[0]["arsivlenme"] is not None
 
-def test_eski_format_bozulmuyor():
-    # durum alanı olmayan eski görevler sistemi çökertmemeli
-    eski_gorev = {"id": 1, "baslik": "Eski görev", "tamamlandi": False, "oncelik": "normal"}
-    with open(DOSYA, "w", encoding="utf-8") as f:
-        json.dump([eski_gorev], f)
-    gorevler = gorevleri_yukle()
-    assert len(gorevler) == 1
+def test_bos_veritabani_calisiyor():
+    # Hiç görev yokken sistem çökmemeli
+    assert gorevleri_yukle() == []
+    assert arsivi_yukle() == []
 
 # --- kenar durum testleri ---
 
 def test_arsivleme_sonrasi_id_cakismaz():
     # 3 görev ekle, ortadakini arşivle, yeni ekle → ID çakışmamalı
+    import sqlite3
     gorev_ekle("Birinci")
     gorev_ekle("Ikinci")
     gorev_ekle("Ucuncu")
     gorev_arsivle(2)
-    gorev_ekle("Dorduncu")
-    from tasks import _tum_gorevleri_yukle
-    tum_idler = [g["id"] for g in _tum_gorevleri_yukle()]
+    yeni = gorev_ekle("Dorduncu")
+    with sqlite3.connect(DB) as con:
+        tum_idler = [r[0] for r in con.execute("SELECT id FROM gorevler").fetchall()]
     assert len(tum_idler) == len(set(tum_idler))
 
 
@@ -232,11 +228,8 @@ def test_aktife_alinca_aktif_listede_gorunur():
 
 # --- kenar durum testleri ---
 
-def test_bozuk_json_cokturmez(tmp_path, monkeypatch):
-    # tasks.json bozuk içerik içeriyorsa program çökmemeli
+def test_db_olmadan_cokturmez(tmp_path, monkeypatch):
+    # Veritabanı dosyası yoksa otomatik oluşturulmalı, çökmemeli
     import tasks
-    bozuk_dosya = tmp_path / "tasks.json"
-    bozuk_dosya.write_text("bu gecerli json degil {{{")
-    monkeypatch.setattr(tasks, "DOSYA", str(bozuk_dosya))
-    gorevler = tasks.gorevleri_yukle()
-    assert gorevler == []  # çökmek yerine boş liste döndürmeli
+    monkeypatch.setattr(tasks, "DB", str(tmp_path / "test.db"))
+    assert tasks.gorevleri_yukle() == []
