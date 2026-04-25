@@ -1,16 +1,24 @@
 from tasks import gorev_ekle, gorev_tamamla, gorev_arsivle, gorevleri_yukle, arsivi_yukle
 
 
+def sira_no_to_id(sira_no):
+    """Kullanıcının gördüğü sıra numarasını iç ID'ye çevirir. Geçersizse None döner."""
+    gorevler = gorevleri_yukle()
+    if 1 <= sira_no <= len(gorevler):
+        return gorevler[sira_no - 1]["id"]
+    return None
+
+
 def gorevleri_goster():
     gorevler = gorevleri_yukle()
     if not gorevler:
         print("Henüz görev yok.")
         return
     print("\n--- GÖREVLER ---")
-    for g in gorevler:
+    for sira, g in enumerate(gorevler, start=1):
         durum = "✓" if g.get("durum") == "tamamlandi" else "○"
         oncelik = g.get("oncelik", "normal")
-        print(f"  [{durum}] ID:{g['id']}  {g['baslik']}  [{oncelik}]")
+        print(f"  [{durum}] {sira}.  {g['baslik']}  [{oncelik}]")
     print()
 
 
@@ -23,7 +31,7 @@ def arsivi_goster():
     for g in arsiv:
         durum = "✓" if g.get("tamamlanma") else "○"
         tarih = g.get("arsivlenme", "-")
-        print(f"  [{durum}] ID:{g['id']}  {g['baslik']}  [{g.get('oncelik','normal')}]  {tarih}")
+        print(f"  [{durum}] {g['baslik']}  [{g.get('oncelik','normal')}]  {tarih}")
     print()
 
 
@@ -48,31 +56,33 @@ def main():
             oncelik = input("Öncelik (dusuk / normal / yuksek) [varsayılan: normal]: ").strip() or "normal"
             try:
                 gorev = gorev_ekle(baslik, oncelik)
-                print(f"Eklendi: {gorev['baslik']} | Öncelik: {gorev['oncelik']} (ID: {gorev['id']})")
+                print(f"Eklendi: {gorev['baslik']} | Öncelik: {gorev['oncelik']}")
             except ValueError as e:
                 print(f"Hata: {e}")
 
         elif secim == "2":
             gorevleri_goster()
             try:
-                gorev_id = int(input("Tamamlanacak görev ID: "))
-                if gorev_tamamla(gorev_id):
+                sira = int(input("Tamamlanacak görev sıra no: "))
+                gorev_id = sira_no_to_id(sira)
+                if gorev_id and gorev_tamamla(gorev_id):
                     print("Görev tamamlandı!")
                 else:
-                    print("Görev bulunamadı.")
+                    print("Geçersiz sıra numarası.")
             except ValueError:
-                print("Geçersiz ID.")
+                print("Geçersiz giriş.")
 
         elif secim == "3":
             gorevleri_goster()
             try:
-                gorev_id = int(input("Arşivlenecek görev ID: "))
-                if gorev_arsivle(gorev_id):
+                sira = int(input("Arşivlenecek görev sıra no: "))
+                gorev_id = sira_no_to_id(sira)
+                if gorev_id and gorev_arsivle(gorev_id):
                     print("Görev arşivlendi.")
                 else:
-                    print("Görev bulunamadı.")
+                    print("Geçersiz sıra numarası.")
             except ValueError:
-                print("Geçersiz ID.")
+                print("Geçersiz giriş.")
 
         elif secim == "4":
             gorevleri_goster()
