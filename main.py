@@ -1,4 +1,4 @@
-from tasks import gorev_ekle, gorev_tamamla, gorev_sil, gorevleri_yukle
+from tasks import gorev_ekle, gorev_tamamla, gorev_arsivle, gorevleri_yukle, arsivi_yukle
 
 
 def gorevleri_goster():
@@ -8,9 +8,22 @@ def gorevleri_goster():
         return
     print("\n--- GÖREVLER ---")
     for g in gorevler:
-        durum = "✓" if g["tamamlandi"] else "○"
+        durum = "✓" if g.get("durum") == "tamamlandi" else "○"
         oncelik = g.get("oncelik", "normal")
         print(f"  [{durum}] ID:{g['id']}  {g['baslik']}  [{oncelik}]")
+    print()
+
+
+def arsivi_goster():
+    arsiv = arsivi_yukle()
+    if not arsiv:
+        print("Arşiv boş.")
+        return
+    print("\n--- ARŞİV ---")
+    for g in arsiv:
+        durum_etiketi = "tamamlandı" if g.get("durum") == "tamamlandi" else "arşivlendi"
+        tarih = g.get("arsivlenme") or g.get("tamamlanma") or "-"
+        print(f"  ID:{g['id']}  {g['baslik']}  [{durum_etiketi}]  {tarih}")
     print()
 
 
@@ -18,8 +31,9 @@ def menu():
     print("\n=== GÖREV YÖNETİCİSİ ===")
     print("1. Görev ekle")
     print("2. Görevi tamamla")
-    print("3. Görevi sil")
+    print("3. Görevi arşivle")
     print("4. Görevleri listele")
+    print("5. Arşivi görüntüle")
     print("0. Çıkış")
     return input("Seçim: ").strip()
 
@@ -52,9 +66,9 @@ def main():
         elif secim == "3":
             gorevleri_goster()
             try:
-                gorev_id = int(input("Silinecek görev ID: "))
-                if gorev_sil(gorev_id):
-                    print("Görev silindi.")
+                gorev_id = int(input("Arşivlenecek görev ID: "))
+                if gorev_arsivle(gorev_id):
+                    print("Görev arşivlendi.")
                 else:
                     print("Görev bulunamadı.")
             except ValueError:
@@ -62,6 +76,9 @@ def main():
 
         elif secim == "4":
             gorevleri_goster()
+
+        elif secim == "5":
+            arsivi_goster()
 
         elif secim == "0":
             print("Görüşürüz!")

@@ -1,7 +1,7 @@
 import os
 import json
 import pytest
-from tasks import gorev_ekle, gorev_tamamla, gorev_sil, gorevleri_yukle, DOSYA
+from tasks import gorev_ekle, gorev_tamamla, gorev_arsivle, gorevleri_yukle, arsivi_yukle, DOSYA
 
 
 # Her testten önce tasks.json'u temizle
@@ -16,8 +16,8 @@ def setup_function():
 def test_gorev_ekle_basarili():
     gorev = gorev_ekle("Test görevi")
     assert gorev["baslik"] == "Test görevi"
-    assert gorev["tamamlandi"] == False
-    assert gorev["oncelik"] == "normal"  # varsayılan öncelik
+    assert gorev["durum"] == "aktif"
+    assert gorev["oncelik"] == "normal"
 
 
 def test_gorev_ekle_oncelik_ile():
@@ -54,29 +54,92 @@ def test_gorev_tamamla_olmayan_id():
 
 # --- gorev_sil testleri ---
 
-def test_gorev_sil_basarili():
-    gorev = gorev_ekle("Silinecek iş")
-    sonuc = gorev_sil(gorev["id"])
+def test_gorev_arsivle_basarili():
+    gorev = gorev_ekle("Arşivlenecek iş")
+    sonuc = gorev_arsivle(gorev["id"])
     assert sonuc == True
-    assert gorevleri_yukle() == []
 
 
-def test_gorev_sil_olmayan_id():
-    sonuc = gorev_sil(999)
+def test_gorev_arsivle_olmayan_id():
+    sonuc = gorev_arsivle(999)
     assert sonuc == False
 
 
-# --- yeni: kenar durum testleri ---
+# --- zaman damgası ve soft delete testleri ---
 
-def test_silme_sonrasi_id_cakismaz():
-    # 3 görev ekle, ortadakini sil, yeni ekle → ID çakışmamalı
+def test_yeni_gorev_durum_aktif():
+    gorev = gorev_ekle("Yeni görev")
+    assert gorev["durum"] == "aktif"
+
+def test_yeni_gorev_olusturulma_dolu():
+    gorev = gorev_ekle("Yeni görev")
+    assert gorev["olusturulma"] is not None
+
+def test_yeni_gorev_tamamlanma_null():
+    gorev = gorev_ekle("Yeni görev")
+    assert gorev["tamamlanma"] is None
+
+def test_yeni_gorev_arsivlenme_null():
+    gorev = gorev_ekle("Yeni görev")
+    assert gorev["arsivlenme"] is None
+
+def test_tamamlanan_gorev_durum_degisir():
+    gorev = gorev_ekle("Tamamlanacak görev")
+    gorev_tamamla(gorev["id"])
+    aktif = gorevleri_yukle()
+    assert aktif[0]["durum"] == "tamamlandi"
+
+def test_tamamlanan_gorev_tarih_dolu():
+    gorev = gorev_ekle("Tamamlanacak görev")
+    gorev_tamamla(gorev["id"])
+    aktif = gorevleri_yukle()
+    assert aktif[0]["tamamlanma"] is not None
+
+def test_tamamlanan_gorev_aktif_listede_kaliyor():
+    gorev = gorev_ekle("Tamamlanacak görev")
+    gorev_tamamla(gorev["id"])
+    aktif = gorevleri_yukle()
+    assert len(aktif) == 1
+
+def test_arsivlenen_gorev_aktif_listeden_cikar():
+    gorev = gorev_ekle("Arşivlenecek görev")
+    gorev_arsivle(gorev["id"])
+    aktif = gorevleri_yukle()
+    assert len(aktif) == 0
+
+def test_arsivlenen_gorev_arsivde_gorunur():
+    gorev = gorev_ekle("Arşivlenecek görev")
+    gorev_arsivle(gorev["id"])
+    arsiv = arsivi_yukle()
+    assert len(arsiv) == 1
+    assert arsiv[0]["durum"] == "arsivlendi"
+
+def test_arsivlenen_gorev_tarih_dolu():
+    gorev = gorev_ekle("Arşivlenecek görev")
+    gorev_arsivle(gorev["id"])
+    arsiv = arsivi_yukle()
+    assert arsiv[0]["arsivlenme"] is not None
+
+def test_eski_format_bozulmuyor():
+    # durum alanı olmayan eski görevler sistemi çökertmemeli
+    eski_gorev = {"id": 1, "baslik": "Eski görev", "tamamlandi": False, "oncelik": "normal"}
+    with open(DOSYA, "w", encoding="utf-8") as f:
+        json.dump([eski_gorev], f)
+    gorevler = gorevleri_yukle()
+    assert len(gorevler) == 1
+
+# --- kenar durum testleri ---
+
+def test_arsivleme_sonrasi_id_cakismaz():
+    # 3 görev ekle, ortadakini arşivle, yeni ekle → ID çakışmamalı
     gorev_ekle("Birinci")
     gorev_ekle("Ikinci")
     gorev_ekle("Ucuncu")
-    gorev_sil(2)
-    yeni = gorev_ekle("Dorduncu")
-    tum_idler = [g["id"] for g in gorevleri_yukle()]
-    assert len(tum_idler) == len(set(tum_idler))  # hiç tekrar yok
+    gorev_arsivle(2)
+    gorev_ekle("Dorduncu")
+    from tasks import _tum_gorevleri_yukle
+    tum_idler = [g["id"] for g in _tum_gorevleri_yukle()]
+    assert len(tum_idler) == len(set(tum_idler))
 
 
 def test_bos_baslik_kabul_edilmez():
