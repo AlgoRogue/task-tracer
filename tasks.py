@@ -1,7 +1,10 @@
 import json
 import os
 
-DOSYA = "tasks.json"
+# Her zaman bu script'in bulunduğu klasördeki tasks.json'u kullan
+# Böylece hangi dizinden çalıştırılırsa çalıştırılsın aynı dosyayı bulur
+_KLASOR = os.path.dirname(os.path.abspath(__file__))
+DOSYA = os.path.join(_KLASOR, "tasks.json")
 GECERLI_ONCELIKLER = ["dusuk", "normal", "yuksek"]
 
 
