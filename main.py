@@ -10,7 +10,7 @@ def gorevleri_goster():
     for g in gorevler:
         durum = "✓" if g["tamamlandi"] else "○"
         oncelik = g.get("oncelik", "normal")
-        print(f"  [{durum}] {g['id']}. {g['baslik']}  [{oncelik}]")
+        print(f"  [{durum}] ID:{g['id']}  {g['baslik']}  [{oncelik}]")
     print()
 
 
