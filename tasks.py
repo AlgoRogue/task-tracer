@@ -6,11 +6,14 @@ GECERLI_ONCELIKLER = ["dusuk", "normal", "yuksek"]
 
 
 def gorevleri_yukle():
-    """Dosyadan görevleri oku. Dosya yoksa boş liste döndür."""
+    """Dosyadan görevleri oku. Dosya yoksa veya bozuksa boş liste döndür."""
     if not os.path.exists(DOSYA):
         return []
     with open(DOSYA, "r", encoding="utf-8") as f:
-        return json.load(f)
+        try:
+            return json.load(f)
+        except json.JSONDecodeError:
+            return []
 
 
 def gorevleri_kaydet(gorevler):
@@ -21,10 +24,14 @@ def gorevleri_kaydet(gorevler):
 
 def gorev_ekle(baslik, oncelik="normal"):
     """Yeni görev ekle ve kaydet."""
+    if not baslik or not baslik.strip():
+        raise ValueError("Görev başlığı boş olamaz.")
+    if len(baslik) > 200:
+        raise ValueError("Görev başlığı 200 karakterden uzun olamaz.")
     if oncelik not in GECERLI_ONCELIKLER:
         raise ValueError(f"Geçersiz öncelik: '{oncelik}'. Seçenekler: {GECERLI_ONCELIKLER}")
     gorevler = gorevleri_yukle()
-    yeni_id = len(gorevler) + 1
+    yeni_id = max((g["id"] for g in gorevler), default=0) + 1
     yeni_gorev = {
         "id": yeni_id,
         "baslik": baslik,

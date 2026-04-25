@@ -31,13 +31,12 @@ def main():
 
         if secim == "1":
             baslik = input("Görev adı: ").strip()
-            if baslik:
-                oncelik = input("Öncelik (dusuk / normal / yuksek) [varsayılan: normal]: ").strip() or "normal"
-                try:
-                    gorev = gorev_ekle(baslik, oncelik)
-                    print(f"Eklendi: {gorev['baslik']} | Öncelik: {gorev['oncelik']} (ID: {gorev['id']})")
-                except ValueError as e:
-                    print(f"Hata: {e}")
+            oncelik = input("Öncelik (dusuk / normal / yuksek) [varsayılan: normal]: ").strip() or "normal"
+            try:
+                gorev = gorev_ekle(baslik, oncelik)
+                print(f"Eklendi: {gorev['baslik']} | Öncelik: {gorev['oncelik']} (ID: {gorev['id']})")
+            except ValueError as e:
+                print(f"Hata: {e}")
 
         elif secim == "2":
             gorevleri_goster()

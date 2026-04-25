@@ -64,3 +64,36 @@ def test_gorev_sil_basarili():
 def test_gorev_sil_olmayan_id():
     sonuc = gorev_sil(999)
     assert sonuc == False
+
+
+# --- yeni: kenar durum testleri ---
+
+def test_silme_sonrasi_id_cakismaz():
+    # 3 görev ekle, ortadakini sil, yeni ekle → ID çakışmamalı
+    gorev_ekle("Birinci")
+    gorev_ekle("Ikinci")
+    gorev_ekle("Ucuncu")
+    gorev_sil(2)
+    yeni = gorev_ekle("Dorduncu")
+    tum_idler = [g["id"] for g in gorevleri_yukle()]
+    assert len(tum_idler) == len(set(tum_idler))  # hiç tekrar yok
+
+
+def test_bos_baslik_kabul_edilmez():
+    with pytest.raises(ValueError):
+        gorev_ekle("")
+
+
+def test_cok_uzun_baslik_kabul_edilmez():
+    with pytest.raises(ValueError):
+        gorev_ekle("a" * 300)
+
+
+def test_bozuk_json_cokturmez(tmp_path, monkeypatch):
+    # tasks.json bozuk içerik içeriyorsa program çökmemeli
+    import tasks
+    bozuk_dosya = tmp_path / "tasks.json"
+    bozuk_dosya.write_text("bu gecerli json degil {{{")
+    monkeypatch.setattr(tasks, "DOSYA", str(bozuk_dosya))
+    gorevler = tasks.gorevleri_yukle()
+    assert gorevler == []  # çökmek yerine boş liste döndürmeli
