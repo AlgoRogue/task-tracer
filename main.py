@@ -14,43 +14,12 @@ def gorevleri_goster():
     print()
 
 
-def yardim_goster():
-    print("""
-=== YARDIM ===
-
-  1. Görev ekle
-     → Yeni bir görev oluşturur.
-     → Öncelik sorulur: dusuk / normal / yuksek
-     → Her görev otomatik bir ID alır.
-
-  2. Görevi tamamla
-     → Mevcut görevler listelenir.
-     → ID girerek görevi tamamlandı olarak işaretlersin.
-     → Tamamlanan görev [✓] ile görünür.
-
-  3. Görevi sil
-     → Mevcut görevler listelenir.
-     → ID girerek görevi kalıcı olarak silersin.
-
-  4. Görevleri listele
-     → Tüm görevleri gösterir.
-     → [○] = tamamlanmadı, [✓] = tamamlandı
-
-  0. Çıkış
-     → Programı kapatır. Görevler kaydedilmiş olur.
-
-  5. Yardım
-     → Bu ekranı gösterir.
-""")
-
-
 def menu():
     print("\n=== GÖREV YÖNETİCİSİ ===")
     print("1. Görev ekle")
     print("2. Görevi tamamla")
     print("3. Görevi sil")
     print("4. Görevleri listele")
-    print("5. Yardım")
     print("0. Çıkış")
     return input("Seçim: ").strip()
 
@@ -94,9 +63,6 @@ def main():
 
         elif secim == "4":
             gorevleri_goster()
-
-        elif secim == "5":
-            yardim_goster()
 
         elif secim == "0":
             print("Görüşürüz!")
