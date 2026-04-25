@@ -1,0 +1,53 @@
+import json
+import os
+
+DOSYA = "tasks.json"
+
+
+def gorevleri_yukle():
+    """Dosyadan görevleri oku. Dosya yoksa boş liste döndür."""
+    if not os.path.exists(DOSYA):
+        return []
+    with open(DOSYA, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def gorevleri_kaydet(gorevler):
+    """Görev listesini dosyaya yaz."""
+    with open(DOSYA, "w", encoding="utf-8") as f:
+        json.dump(gorevler, f, ensure_ascii=False, indent=2)
+
+
+def gorev_ekle(baslik):
+    """Yeni görev ekle ve kaydet."""
+    gorevler = gorevleri_yukle()
+    yeni_id = len(gorevler) + 1
+    yeni_gorev = {
+        "id": yeni_id,
+        "baslik": baslik,
+        "tamamlandi": False
+    }
+    gorevler.append(yeni_gorev)
+    gorevleri_kaydet(gorevler)
+    return yeni_gorev
+
+
+def gorev_tamamla(gorev_id):
+    """Görevi tamamlandı olarak işaretle."""
+    gorevler = gorevleri_yukle()
+    for gorev in gorevler:
+        if gorev["id"] == gorev_id:
+            gorev["tamamlandi"] = True
+            gorevleri_kaydet(gorevler)
+            return True
+    return False  # Görev bulunamadı
+
+
+def gorev_sil(gorev_id):
+    """Görevi listeden çıkar."""
+    gorevler = gorevleri_yukle()
+    yeni_liste = [g for g in gorevler if g["id"] != gorev_id]
+    if len(yeni_liste) == len(gorevler):
+        return False  # Silinecek görev bulunamadı
+    gorevleri_kaydet(yeni_liste)
+    return True
