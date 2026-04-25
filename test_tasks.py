@@ -152,6 +152,51 @@ def test_cok_uzun_baslik_kabul_edilmez():
         gorev_ekle("a" * 300)
 
 
+# --- entegrasyon testleri ---
+
+def test_ekle_tamamla_arsivle_akisi():
+    # Kullanıcının en yaygın yolculuğu: ekle → tamamla → arşivle
+    gorev = gorev_ekle("Markete git", "yuksek")
+    gorev_tamamla(gorev["id"])
+    gorev_arsivle(gorev["id"])
+
+    assert gorevleri_yukle() == []          # aktif listede yok
+    arsiv = arsivi_yukle()
+    assert len(arsiv) == 1
+    assert arsiv[0]["tamamlanma"] is not None   # tamamlandı
+    assert arsiv[0]["arsivlenme"] is not None   # arşivlendi
+
+
+def test_vazgecme_akisi():
+    # Kullanıcı tamamlamadan vazgeçer: ekle → arşivle
+    gorev = gorev_ekle("Spor yap")
+    gorev_arsivle(gorev["id"])
+
+    assert gorevleri_yukle() == []
+    arsiv = arsivi_yukle()
+    assert arsiv[0]["tamamlanma"] is None       # hiç tamamlanmadı
+    assert arsiv[0]["arsivlenme"] is not None   # ama arşivlendi
+
+
+def test_coklu_gorev_karismazlik():
+    # Birden fazla görev varken işlemler birbirine karışmamalı
+    g1 = gorev_ekle("Birinci")
+    g2 = gorev_ekle("Ikinci")
+    g3 = gorev_ekle("Ucuncu")
+
+    gorev_tamamla(g1["id"])
+    gorev_arsivle(g2["id"])
+
+    aktif = gorevleri_yukle()
+    arsiv = arsivi_yukle()
+
+    assert len(aktif) == 2                          # g1(tamamlı) + g3(aktif)
+    assert len(arsiv) == 1                          # sadece g2
+    assert arsiv[0]["baslik"] == "Ikinci"
+
+
+# --- kenar durum testleri ---
+
 def test_bozuk_json_cokturmez(tmp_path, monkeypatch):
     # tasks.json bozuk içerik içeriyorsa program çökmemeli
     import tasks
