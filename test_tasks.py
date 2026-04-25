@@ -1,7 +1,7 @@
 import os
 import json
 import pytest
-from tasks import gorev_ekle, gorev_tamamla, gorev_arsivle, gorevleri_yukle, arsivi_yukle, DOSYA
+from tasks import gorev_ekle, gorev_tamamla, gorev_arsivle, gorev_aktife_al, gorevleri_yukle, arsivi_yukle, DOSYA
 
 
 # Her testten önce tasks.json'u temizle
@@ -193,6 +193,41 @@ def test_coklu_gorev_karismazlik():
     assert len(aktif) == 2                          # g1(tamamlı) + g3(aktif)
     assert len(arsiv) == 1                          # sadece g2
     assert arsiv[0]["baslik"] == "Ikinci"
+
+
+# --- görevi aktife al testleri ---
+
+def test_tamamlanan_gorevi_aktife_al():
+    gorev = gorev_ekle("Yoga yap")
+    gorev_tamamla(gorev["id"])
+    sonuc = gorev_aktife_al(gorev["id"])
+    assert sonuc == True
+    aktif = gorevleri_yukle()
+    assert aktif[0]["durum"] == "aktif"
+    assert aktif[0]["tamamlanma"] is None
+
+
+def test_arsivlenen_gorevi_aktife_al():
+    gorev = gorev_ekle("Kitap oku")
+    gorev_arsivle(gorev["id"])
+    sonuc = gorev_aktife_al(gorev["id"])
+    assert sonuc == True
+    aktif = gorevleri_yukle()
+    assert aktif[0]["durum"] == "aktif"
+    assert aktif[0]["arsivlenme"] is None
+
+
+def test_aktife_al_olmayan_id():
+    sonuc = gorev_aktife_al(999)
+    assert sonuc == False
+
+
+def test_aktife_alinca_aktif_listede_gorunur():
+    gorev = gorev_ekle("Koşu yap")
+    gorev_arsivle(gorev["id"])
+    assert len(gorevleri_yukle()) == 0
+    gorev_aktife_al(gorev["id"])
+    assert len(gorevleri_yukle()) == 1
 
 
 # --- kenar durum testleri ---
