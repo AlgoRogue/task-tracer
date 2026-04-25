@@ -1,10 +1,9 @@
-import json
+import sqlite3
 import os
 from datetime import datetime
 
-# Her zaman bu script'in bulunduğu klasördeki tasks.json'u kullan
 _KLASOR = os.path.dirname(os.path.abspath(__file__))
-DOSYA = os.path.join(_KLASOR, "tasks.json")
+DB = os.path.join(_KLASOR, "tasks.db")
 
 GECERLI_ONCELIKLER = ["dusuk", "normal", "yuksek"]
 
@@ -13,44 +12,45 @@ def _simdi():
     return datetime.now().isoformat(timespec="seconds")
 
 
+def _baglan():
+    con = sqlite3.connect(DB)
+    con.row_factory = sqlite3.Row  # sütun adıyla erişim sağlar
+    return con
+
+
+def _init_db():
+    with _baglan() as con:
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS gorevler (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                baslik    TEXT    NOT NULL,
+                oncelik   TEXT    NOT NULL DEFAULT 'normal',
+                durum     TEXT    NOT NULL DEFAULT 'aktif',
+                olusturulma TEXT,
+                tamamlanma  TEXT,
+                arsivlenme  TEXT
+            )
+        """)
+
+
 def gorevleri_yukle():
     """Aktif ve tamamlanmış görevleri döndür (arşivlenenler hariç)."""
-    if not os.path.exists(DOSYA):
-        return []
-    with open(DOSYA, "r", encoding="utf-8") as f:
-        try:
-            gorevler = json.load(f)
-        except json.JSONDecodeError:
-            return []
-    return [g for g in gorevler if g.get("durum", "aktif") != "arsivlendi"]
+    _init_db()
+    with _baglan() as con:
+        rows = con.execute(
+            "SELECT * FROM gorevler WHERE durum != 'arsivlendi' ORDER BY id"
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 def arsivi_yukle():
     """Sadece arşivlenmiş görevleri döndür."""
-    if not os.path.exists(DOSYA):
-        return []
-    with open(DOSYA, "r", encoding="utf-8") as f:
-        try:
-            gorevler = json.load(f)
-        except json.JSONDecodeError:
-            return []
-    return [g for g in gorevler if g.get("durum") == "arsivlendi"]
-
-
-def _tum_gorevleri_yukle():
-    """Tüm görevleri döndür (iç kullanım için)."""
-    if not os.path.exists(DOSYA):
-        return []
-    with open(DOSYA, "r", encoding="utf-8") as f:
-        try:
-            return json.load(f)
-        except json.JSONDecodeError:
-            return []
-
-
-def _tum_gorevleri_kaydet(gorevler):
-    with open(DOSYA, "w", encoding="utf-8") as f:
-        json.dump(gorevler, f, ensure_ascii=False, indent=2)
+    _init_db()
+    with _baglan() as con:
+        rows = con.execute(
+            "SELECT * FROM gorevler WHERE durum = 'arsivlendi' ORDER BY id"
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 def gorev_ekle(baslik, oncelik="normal"):
@@ -61,57 +61,45 @@ def gorev_ekle(baslik, oncelik="normal"):
         raise ValueError("Görev başlığı 200 karakterden uzun olamaz.")
     if oncelik not in GECERLI_ONCELIKLER:
         raise ValueError(f"Geçersiz öncelik: '{oncelik}'. Seçenekler: {GECERLI_ONCELIKLER}")
-    gorevler = _tum_gorevleri_yukle()
-    yeni_id = max((g["id"] for g in gorevler), default=0) + 1
-    yeni_gorev = {
-        "id": yeni_id,
-        "baslik": baslik,
-        "oncelik": oncelik,
-        "durum": "aktif",
-        "olusturulma": _simdi(),
-        "tamamlanma": None,
-        "arsivlenme": None,
-    }
-    gorevler.append(yeni_gorev)
-    _tum_gorevleri_kaydet(gorevler)
-    return yeni_gorev
+    _init_db()
+    with _baglan() as con:
+        cur = con.execute(
+            "INSERT INTO gorevler (baslik, oncelik, durum, olusturulma) VALUES (?, ?, 'aktif', ?)",
+            (baslik, oncelik, _simdi())
+        )
+        gorev_id = cur.lastrowid
+        row = con.execute("SELECT * FROM gorevler WHERE id = ?", (gorev_id,)).fetchone()
+    return dict(row)
 
 
 def gorev_tamamla(gorev_id):
     """Görevi tamamlandı olarak işaretle."""
-    gorevler = _tum_gorevleri_yukle()
-    for gorev in gorevler:
-        if gorev["id"] == gorev_id:
-            gorev["durum"] = "tamamlandi"
-            gorev["tamamlandi"] = True
-            gorev.setdefault("tamamlanma", None)
-            gorev["tamamlanma"] = _simdi()
-            _tum_gorevleri_kaydet(gorevler)
-            return True
-    return False
+    _init_db()
+    with _baglan() as con:
+        etkilenen = con.execute(
+            "UPDATE gorevler SET durum = 'tamamlandi', tamamlanma = ? WHERE id = ?",
+            (_simdi(), gorev_id)
+        ).rowcount
+    return etkilenen > 0
 
 
 def gorev_arsivle(gorev_id):
     """Görevi arşivle (soft delete)."""
-    gorevler = _tum_gorevleri_yukle()
-    for gorev in gorevler:
-        if gorev["id"] == gorev_id:
-            gorev["durum"] = "arsivlendi"
-            gorev.setdefault("arsivlenme", None)
-            gorev["arsivlenme"] = _simdi()
-            _tum_gorevleri_kaydet(gorevler)
-            return True
-    return False
+    _init_db()
+    with _baglan() as con:
+        etkilenen = con.execute(
+            "UPDATE gorevler SET durum = 'arsivlendi', arsivlenme = ? WHERE id = ?",
+            (_simdi(), gorev_id)
+        ).rowcount
+    return etkilenen > 0
 
 
 def gorev_aktife_al(gorev_id):
     """Tamamlanmış veya arşivlenmiş görevi tekrar aktife çeker."""
-    gorevler = _tum_gorevleri_yukle()
-    for gorev in gorevler:
-        if gorev["id"] == gorev_id:
-            gorev["durum"] = "aktif"
-            gorev["tamamlanma"] = None
-            gorev["arsivlenme"] = None
-            _tum_gorevleri_kaydet(gorevler)
-            return True
-    return False
+    _init_db()
+    with _baglan() as con:
+        etkilenen = con.execute(
+            "UPDATE gorevler SET durum = 'aktif', tamamlanma = NULL, arsivlenme = NULL WHERE id = ?",
+            (gorev_id,)
+        ).rowcount
+    return etkilenen > 0
