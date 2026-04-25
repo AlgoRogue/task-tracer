@@ -1,8 +1,13 @@
 import os
 import pytest
+from datetime import date, timedelta
 from fastapi.testclient import TestClient
 from api import app
 from tasks import DB
+
+BUGUN = str(date.today())
+YARIN = str(date.today() + timedelta(days=1))
+DUN   = str(date.today() - timedelta(days=1))
 
 client = TestClient(app)
 
@@ -106,3 +111,30 @@ def test_arsivlenen_gorev_arsivde_gorunur():
     r = client.get("/arsiv")
     assert len(r.json()) == 1
     assert r.json()[0]["durum"] == "arsivlendi"
+
+
+def test_son_tarih_ile_gorev_olustur():
+    r = client.post("/gorevler", json={"baslik": "Randevu", "son_tarih": YARIN})
+    assert r.status_code == 201
+    assert r.json()["son_tarih"] == YARIN
+
+
+def test_bugun_endpoint():
+    client.post("/gorevler", json={"baslik": "Bugünkü", "son_tarih": BUGUN})
+    client.post("/gorevler", json={"baslik": "Yarınki", "son_tarih": YARIN})
+    r = client.get("/gorevler/bugun")
+    assert len(r.json()) == 1
+    assert r.json()[0]["baslik"] == "Bugünkü"
+
+
+def test_gecmis_endpoint():
+    client.post("/gorevler", json={"baslik": "Gecikmiş", "son_tarih": DUN})
+    r = client.get("/gorevler/gecmis")
+    assert len(r.json()) == 1
+
+
+def test_yaklasan_endpoint():
+    client.post("/gorevler", json={"baslik": "Bu hafta", "son_tarih": YARIN})
+    client.post("/gorevler", json={"baslik": "Uzak", "son_tarih": str(date.today() + timedelta(days=30))})
+    r = client.get("/gorevler/yaklasan?gun=7")
+    assert len(r.json()) == 1

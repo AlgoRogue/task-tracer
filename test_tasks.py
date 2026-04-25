@@ -1,6 +1,12 @@
 import os
 import pytest
-from tasks import gorev_ekle, gorev_tamamla, gorev_arsivle, gorev_aktife_al, gorevleri_yukle, arsivi_yukle, DB
+from datetime import date, timedelta
+from tasks import (
+    gorev_ekle, gorev_tamamla, gorev_arsivle, gorev_aktife_al,
+    gorevleri_yukle, arsivi_yukle,
+    bugunun_gorevleri, gecmis_gorevler, yaklasan_gorevler,
+    DB
+)
 
 
 # Her testten önce veritabanını temizle
@@ -224,6 +230,51 @@ def test_aktife_alinca_aktif_listede_gorunur():
     assert len(gorevleri_yukle()) == 0
     gorev_aktife_al(gorev["id"])
     assert len(gorevleri_yukle()) == 1
+
+
+# --- son_tarih ve zaman sorguları testleri ---
+
+DUN   = str(date.today() - timedelta(days=1))
+BUGUN = str(date.today())
+YARIN = str(date.today() + timedelta(days=1))
+
+
+def test_gorev_son_tarih_ile_eklenir():
+    gorev = gorev_ekle("Yoga yap", son_tarih=YARIN)
+    assert gorev["son_tarih"] == YARIN
+
+
+def test_gorev_son_tarih_olmadan_null():
+    gorev = gorev_ekle("Yoga yap")
+    assert gorev["son_tarih"] is None
+
+
+def test_bugunun_gorevleri():
+    gorev_ekle("Bugünkü iş", son_tarih=BUGUN)
+    gorev_ekle("Yarınki iş", son_tarih=YARIN)
+    gorev_ekle("Dünkü iş",   son_tarih=DUN)
+    assert len(bugunun_gorevleri()) == 1
+    assert bugunun_gorevleri()[0]["baslik"] == "Bugünkü iş"
+
+
+def test_gecmis_gorevler():
+    gorev_ekle("Gecikmiş iş", son_tarih=DUN)
+    gorev_ekle("Bugünkü iş",  son_tarih=BUGUN)
+    assert len(gecmis_gorevler()) == 1
+    assert gecmis_gorevler()[0]["baslik"] == "Gecikmiş iş"
+
+
+def test_tamamlanan_gecmis_gorev_gelmez():
+    gorev = gorev_ekle("Gecikmiş ama bitti", son_tarih=DUN)
+    gorev_tamamla(gorev["id"])
+    assert len(gecmis_gorevler()) == 0
+
+
+def test_yaklasan_gorevler():
+    gorev_ekle("Bugünkü",      son_tarih=BUGUN)
+    gorev_ekle("3 gün sonra",  son_tarih=str(date.today() + timedelta(days=3)))
+    gorev_ekle("10 gün sonra", son_tarih=str(date.today() + timedelta(days=10)))
+    assert len(yaklasan_gorevler(gun=7)) == 2
 
 
 # --- kenar durum testleri ---

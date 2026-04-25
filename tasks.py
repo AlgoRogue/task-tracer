@@ -1,6 +1,6 @@
 import sqlite3
 import os
-from datetime import datetime
+from datetime import datetime, date
 
 _KLASOR = os.path.dirname(os.path.abspath(__file__))
 DB = os.path.join(_KLASOR, "tasks.db")
@@ -12,9 +12,13 @@ def _simdi():
     return datetime.now().isoformat(timespec="seconds")
 
 
+def _bugun():
+    return str(date.today())
+
+
 def _baglan():
     con = sqlite3.connect(DB)
-    con.row_factory = sqlite3.Row  # sütun adıyla erişim sağlar
+    con.row_factory = sqlite3.Row
     return con
 
 
@@ -22,15 +26,21 @@ def _init_db():
     with _baglan() as con:
         con.execute("""
             CREATE TABLE IF NOT EXISTS gorevler (
-                id        INTEGER PRIMARY KEY AUTOINCREMENT,
-                baslik    TEXT    NOT NULL,
-                oncelik   TEXT    NOT NULL DEFAULT 'normal',
-                durum     TEXT    NOT NULL DEFAULT 'aktif',
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                baslik      TEXT    NOT NULL,
+                oncelik     TEXT    NOT NULL DEFAULT 'normal',
+                durum       TEXT    NOT NULL DEFAULT 'aktif',
                 olusturulma TEXT,
                 tamamlanma  TEXT,
-                arsivlenme  TEXT
+                arsivlenme  TEXT,
+                son_tarih   TEXT
             )
         """)
+        # Mevcut veritabanlarına son_tarih sütununu ekle
+        try:
+            con.execute("ALTER TABLE gorevler ADD COLUMN son_tarih TEXT")
+        except Exception:
+            pass
 
 
 def gorevleri_yukle():
@@ -53,7 +63,45 @@ def arsivi_yukle():
     return [dict(r) for r in rows]
 
 
-def gorev_ekle(baslik, oncelik="normal"):
+def bugunun_gorevleri():
+    """son_tarih bugün olan aktif/tamamlanmış görevler."""
+    _init_db()
+    with _baglan() as con:
+        rows = con.execute(
+            "SELECT * FROM gorevler WHERE son_tarih = ? AND durum != 'arsivlendi' ORDER BY id",
+            (_bugun(),)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def gecmis_gorevler():
+    """son_tarihi geçmiş ve henüz tamamlanmamış görevler."""
+    _init_db()
+    with _baglan() as con:
+        rows = con.execute(
+            "SELECT * FROM gorevler WHERE son_tarih < ? AND durum = 'aktif' ORDER BY son_tarih",
+            (_bugun(),)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def yaklasan_gorevler(gun=7):
+    """Bugünden itibaren N gün içinde bitmesi gereken aktif görevler."""
+    _init_db()
+    from datetime import timedelta
+    bitis = str(date.today() + timedelta(days=gun))
+    with _baglan() as con:
+        rows = con.execute(
+            """SELECT * FROM gorevler
+               WHERE son_tarih >= ? AND son_tarih <= ?
+               AND durum = 'aktif'
+               ORDER BY son_tarih""",
+            (_bugun(), bitis)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def gorev_ekle(baslik, oncelik="normal", son_tarih=None):
     """Yeni görev ekle ve kaydet."""
     if not baslik or not baslik.strip():
         raise ValueError("Görev başlığı boş olamaz.")
@@ -64,11 +112,10 @@ def gorev_ekle(baslik, oncelik="normal"):
     _init_db()
     with _baglan() as con:
         cur = con.execute(
-            "INSERT INTO gorevler (baslik, oncelik, durum, olusturulma) VALUES (?, ?, 'aktif', ?)",
-            (baslik, oncelik, _simdi())
+            "INSERT INTO gorevler (baslik, oncelik, durum, olusturulma, son_tarih) VALUES (?, ?, 'aktif', ?, ?)",
+            (baslik, oncelik, _simdi(), son_tarih)
         )
-        gorev_id = cur.lastrowid
-        row = con.execute("SELECT * FROM gorevler WHERE id = ?", (gorev_id,)).fetchone()
+        row = con.execute("SELECT * FROM gorevler WHERE id = ?", (cur.lastrowid,)).fetchone()
     return dict(row)
 
 
