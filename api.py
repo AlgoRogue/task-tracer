@@ -1,8 +1,10 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from typing import Optional
 from tasks import (
     gorev_ekle, gorev_tamamla, gorev_arsivle,
-    gorev_aktife_al, gorevleri_yukle, arsivi_yukle
+    gorev_aktife_al, gorevleri_yukle, arsivi_yukle,
+    bugunun_gorevleri, gecmis_gorevler, yaklasan_gorevler
 )
 
 app = FastAPI(title="Task Tracer API")
@@ -11,6 +13,7 @@ app = FastAPI(title="Task Tracer API")
 class GorevGirdisi(BaseModel):
     baslik: str
     oncelik: str = "normal"
+    son_tarih: Optional[str] = None
 
 
 @app.get("/gorevler")
@@ -21,7 +24,7 @@ def gorevleri_listele():
 @app.post("/gorevler", status_code=201)
 def gorev_olustur(veri: GorevGirdisi):
     try:
-        return gorev_ekle(veri.baslik, veri.oncelik)
+        return gorev_ekle(veri.baslik, veri.oncelik, veri.son_tarih)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
@@ -50,3 +53,18 @@ def gorevi_aktife_al(gorev_id: int):
 @app.get("/arsiv")
 def arsivi_goruntule():
     return arsivi_yukle()
+
+
+@app.get("/gorevler/bugun")
+def bugun():
+    return bugunun_gorevleri()
+
+
+@app.get("/gorevler/gecmis")
+def gecmis():
+    return gecmis_gorevler()
+
+
+@app.get("/gorevler/yaklasan")
+def yaklasan(gun: int = 7):
+    return yaklasan_gorevler(gun)
