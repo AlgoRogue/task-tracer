@@ -59,6 +59,25 @@ _MIGRASYONLAR = [
             olusturulma TEXT NOT NULL
         )
     """),
+    (5, """
+        CREATE TABLE IF NOT EXISTS desen_hafizasi (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            ham_girdi    TEXT NOT NULL,
+            niyet        TEXT NOT NULL,
+            onay_sayisi  INTEGER NOT NULL DEFAULT 0,
+            red_sayisi   INTEGER NOT NULL DEFAULT 0,
+            guven        REAL NOT NULL DEFAULT 0.5,
+            son_kullanim TEXT NOT NULL
+        )
+    """),
+    (6, """
+        CREATE TABLE IF NOT EXISTS session_context (
+            anahtar      TEXT PRIMARY KEY,
+            deger        TEXT NOT NULL,
+            son_guncell  TEXT NOT NULL,
+            oturum_mu    INTEGER NOT NULL DEFAULT 0
+        )
+    """),
 ]
 
 
@@ -430,3 +449,101 @@ def ajan_olaylarini_getir(ajan_adi=None, limit=50):
                 (limit,)
             ).fetchall()
     return [dict(r) for r in rows]
+
+
+# --- desen_hafizasi ---
+
+def desen_ekle(ham_girdi, niyet_dict, guven=0.5):
+    import json
+    _init_db()
+    with _baglan() as con:
+        cur = con.execute(
+            "INSERT INTO desen_hafizasi (ham_girdi, niyet, onay_sayisi, red_sayisi, guven, son_kullanim) VALUES (?, ?, 0, 0, ?, ?)",
+            (ham_girdi.strip().lower(), json.dumps(niyet_dict, ensure_ascii=False), guven, _simdi())
+        )
+    return cur.lastrowid
+
+
+def desen_listele(limit=200):
+    _init_db()
+    with _baglan() as con:
+        rows = con.execute(
+            "SELECT * FROM desen_hafizasi ORDER BY guven DESC, onay_sayisi DESC LIMIT ?",
+            (limit,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def desen_onayla(desen_id):
+    _init_db()
+    with _baglan() as con:
+        row = con.execute("SELECT onay_sayisi, red_sayisi FROM desen_hafizasi WHERE id = ?", (desen_id,)).fetchone()
+        if row is None:
+            return False
+        onay = row["onay_sayisi"] + 1
+        red = row["red_sayisi"]
+        yeni_guven = round(onay / (onay + red + 1e-9), 4)
+        con.execute(
+            "UPDATE desen_hafizasi SET onay_sayisi = ?, guven = ?, son_kullanim = ? WHERE id = ?",
+            (onay, yeni_guven, _simdi(), desen_id)
+        )
+    return True
+
+
+def desen_reddet(desen_id):
+    _init_db()
+    with _baglan() as con:
+        row = con.execute("SELECT onay_sayisi, red_sayisi FROM desen_hafizasi WHERE id = ?", (desen_id,)).fetchone()
+        if row is None:
+            return False
+        onay = row["onay_sayisi"]
+        red = row["red_sayisi"] + 1
+        yeni_guven = round(onay / (onay + red + 1e-9), 4)
+        con.execute(
+            "UPDATE desen_hafizasi SET red_sayisi = ?, guven = ?, son_kullanim = ? WHERE id = ?",
+            (red, yeni_guven, _simdi(), desen_id)
+        )
+    return True
+
+
+# --- session_context ---
+
+def session_degerini_kaydet(anahtar, deger, oturum_mu=False):
+    import json
+    _init_db()
+    with _baglan() as con:
+        con.execute(
+            "INSERT OR REPLACE INTO session_context (anahtar, deger, son_guncell, oturum_mu) VALUES (?, ?, ?, ?)",
+            (anahtar, json.dumps(deger, ensure_ascii=False), _simdi(), 1 if oturum_mu else 0)
+        )
+
+
+def session_degeri_al(anahtar, ttl_saat=None):
+    import json
+    from datetime import datetime, timedelta
+    _init_db()
+    with _baglan() as con:
+        row = con.execute(
+            "SELECT deger, son_guncell FROM session_context WHERE anahtar = ?",
+            (anahtar,)
+        ).fetchone()
+    if row is None:
+        return None
+    if ttl_saat is not None:
+        son_guncell = datetime.fromisoformat(row["son_guncell"])
+        if datetime.now() - son_guncell > timedelta(hours=ttl_saat):
+            session_anahtarini_sil(anahtar)
+            return None
+    return json.loads(row["deger"])
+
+
+def session_anahtarini_sil(anahtar):
+    _init_db()
+    with _baglan() as con:
+        con.execute("DELETE FROM session_context WHERE anahtar = ?", (anahtar,))
+
+
+def session_oturumu_temizle():
+    _init_db()
+    with _baglan() as con:
+        con.execute("DELETE FROM session_context WHERE oturum_mu = 1")
