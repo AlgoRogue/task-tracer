@@ -2,22 +2,17 @@
 Encoder arayüzü ve stub implementasyonu.
 
 Gerçek model mevcut değilken karakter n-gram + kosinüs benzerliği
-ile çalışan bir stub kullanılır. Gerçek model entegre edildiğinde
-sadece _gercek_model_yukle() implementasyonu değişir, arayüz aynı kalır.
+ile çalışan bir stub kullanılır. Gerçek model yüklendiğinde
+sentence-transformers ile embedding tabanlı benzerlik hesaplanır.
 
-Gerçek model için:  MoritzLaurer/mDeBERTa-v3-base-mnli-xnli (~280MB)
-Öneri:              sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 (~420MB)
+Model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 (~420MB)
 """
 import re
 import math
-from typing import Optional
 import numpy as np
+from typing import Optional
 
-# Gerçek model hazır olduğunda True yapılır
-_GERCEK_MODEL_URL = "MoritzLaurer/mDeBERTa-v3-base-mnli-xnli"
 
-# Niyet başına referans cümleler — Türkçe örnekler
-# Daha fazla örnek eklenirse n-gram benzerliği iyileşir.
 _NIYET_REFERANS = {
     "gorev_ekle": [
         "yeni görev ekle oluştur kaydet",
@@ -50,7 +45,6 @@ _NIYET_REFERANS = {
 
 
 def _ngram_vektoru(metin: str, n: int = 3) -> dict[str, int]:
-    """Karakter n-gramlarını frekans sözlüğü olarak döndürür."""
     metin = re.sub(r"\s+", " ", metin.lower().strip())
     return {metin[i:i+n]: 1 for i in range(len(metin) - n + 1)}
 
@@ -66,10 +60,6 @@ def _kosinüs(a: dict, b: dict) -> float:
 
 
 def _stub_siniflandir(girdi: str) -> dict:
-    """
-    Karakter n-gram benzerliğiyle niyet sınıflandırması (stub).
-    Gerçek encoder yokken kullanılır.
-    """
     girdi_vek = _ngram_vektoru(girdi)
     skorlar = {}
 
@@ -81,10 +71,7 @@ def _stub_siniflandir(girdi: str) -> dict:
         skorlar[niyet] = niyet_skoru
 
     en_iyi = max(skorlar, key=skorlar.get)
-    max_skor = skorlar[en_iyi]
-
-    # Skoru 0-1 arasında normalize et (max gözlem ~0.4-0.6 civarı)
-    guven = round(min(max_skor * 1.8, 0.88), 4)
+    guven = round(min(skorlar[en_iyi] * 1.8, 0.88), 4)
 
     return {
         "niyet": en_iyi,
@@ -94,68 +81,65 @@ def _stub_siniflandir(girdi: str) -> dict:
     }
 
 
+def _kosinüs_np(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """a (1D vektör) ile b (2D matris) satırları arasında kosinüs benzerliği."""
+    norm_a = np.linalg.norm(a)
+    norm_b = np.linalg.norm(b, axis=1)
+    if norm_a == 0:
+        return np.zeros(len(b))
+    return np.dot(b, a) / (norm_b * norm_a + 1e-10)
+
+
 class Encoder:
     """
     Niyet sınıflandırıcısı.
 
-    Gerçek model yolu verilmezse stub (n-gram benzerlik) kullanır.
-    Gerçek model entegre edilince:
-        enc = Encoder(model_yolu="MoritzLaurer/mDeBERTa-v3-base-mnli-xnli")
+    Model yüklenirse sentence-transformers ile embedding benzerliği kullanır,
+    yoksa karakter n-gram stub'a düşer.
+
+        enc = Encoder(model_yolu="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     """
 
     def __init__(self, model_yolu: Optional[str] = None):
         self._model_yolu = model_yolu
-        self._pipeline = None
+        self._model = None
+        self._ref_embeddings: dict[str, np.ndarray] = {}
         self._gercek = False
 
     def _yukle(self) -> bool:
-        """Gerçek modeli yüklemeyi dener. Başarısızsa False döner."""
+        """Modeli yüklemeyi dener, referans embedding'leri önceden hesaplar."""
         if self._gercek:
             return True
         if not self._model_yolu:
             return False
         try:
-            from transformers import pipeline
-            self._pipeline = pipeline(
-                "zero-shot-classification",
-                model=self._model_yolu,
-                device="cpu",
-            )
+            from sentence_transformers import SentenceTransformer
+            self._model = SentenceTransformer(self._model_yolu)
+            self._ref_embeddings = {
+                niyet: self._model.encode(referanslar, convert_to_numpy=True)
+                for niyet, referanslar in _NIYET_REFERANS.items()
+            }
             self._gercek = True
             return True
         except Exception:
             return False
 
     def _gercek_siniflandir(self, girdi: str) -> dict:
-        niyetler = list(_NIYET_REFERANS.keys())
-        etiketler = {
-            "gorev_ekle": "yeni görev ekleme veya oluşturma",
-            "gorev_tamamla": "görevi tamamlama veya bitirme",
-            "gorev_arsivle": "görevi arşivleme veya silme",
-            "gorev_listele": "görevleri listeleme veya gösterme",
-            "gorev_ara": "görev arama veya filtreleme",
+        girdi_emb = self._model.encode(girdi, convert_to_numpy=True)
+        skorlar = {
+            niyet: float(_kosinüs_np(girdi_emb, ref_embs).max())
+            for niyet, ref_embs in self._ref_embeddings.items()
         }
-        sonuc = self._pipeline(
-            girdi,
-            list(etiketler.values()),
-            hypothesis_template="Bu metin {} içeriyor.",
-        )
-        etiket_ters = {v: k for k, v in etiketler.items()}
+        en_iyi = max(skorlar, key=skorlar.get)
         return {
-            "niyet": etiket_ters[sonuc["labels"][0]],
-            "guven": round(sonuc["scores"][0], 4),
-            "skorlar": {
-                etiket_ters[l]: round(s, 4)
-                for l, s in zip(sonuc["labels"], sonuc["scores"])
-            },
+            "niyet": en_iyi,
+            "guven": round(min(skorlar[en_iyi], 0.95), 4),
+            "skorlar": {k: round(v, 4) for k, v in sorted(skorlar.items(), key=lambda x: -x[1])},
             "mod": "gercek",
         }
 
     def siniflandir(self, girdi: str) -> dict:
-        """
-        Girdiyi niyet kategorisine sınıflandırır.
-        Gerçek model yüklüyse onu, değilse stub'ı kullanır.
-        """
+        """Girdiyi niyet kategorisine sınıflandırır."""
         if self._yukle():
             return self._gercek_siniflandir(girdi)
         return _stub_siniflandir(girdi)
@@ -165,7 +149,6 @@ class Encoder:
         return "gercek" if self._gercek else "stub"
 
 
-# Varsayılan örnek — model_ayar üzerinden otomatik keşif
 from nlp import model_ayar as _ma
 _varsayilan = Encoder(model_yolu=_ma.model_yolu_bul())
 

@@ -3,7 +3,7 @@ Encoder modelini HuggingFace'den indirir ve models/encoder/ dizinine kaydeder.
 
 Kullanım:
   python scripts/model_indir.py
-  python scripts/model_indir.py --model MoritzLaurer/mDeBERTa-v3-base-mnli-xnli
+  python scripts/model_indir.py --model sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
   python scripts/model_indir.py --hedef /opt/modeller/encoder
 
 İndirme sonrası ENCODER_MODEL_YOLU ayarlamadan da çalışır:
@@ -13,7 +13,7 @@ import argparse
 import sys
 from pathlib import Path
 
-_VARSAYILAN_MODEL = "MoritzLaurer/mDeBERTa-v3-base-mnli-xnli"
+_VARSAYILAN_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 _VARSAYILAN_HEDEF = Path(__file__).parent.parent / "models" / "encoder"
 
 

@@ -6,5 +6,5 @@ colorama
 jinja2
 
 # Encoder model için (opsiyonel — kurulmadan stub ile çalışır):
-# pip install transformers torch --index-url https://download.pytorch.org/whl/cpu
+# pip install sentence-transformers
 # pip install huggingface-hub  # model_indir.py için
