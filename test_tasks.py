@@ -3,6 +3,8 @@ import pytest
 from datetime import date, timedelta
 from tasks import (
     gorev_ekle, gorev_tamamla, gorev_arsivle, gorev_aktife_al,
+    gorev_sil, gorev_duzenle, etiketlere_gore_filtrele, gorev_ara,
+    db_versiyonu,
     gorevleri_yukle, arsivi_yukle,
     bugunun_gorevleri, gecmis_gorevler, yaklasan_gorevler,
     DB
@@ -275,6 +277,280 @@ def test_yaklasan_gorevler():
     gorev_ekle("3 gün sonra",  son_tarih=str(date.today() + timedelta(days=3)))
     gorev_ekle("10 gün sonra", son_tarih=str(date.today() + timedelta(days=10)))
     assert len(yaklasan_gorevler(gun=7)) == 2
+
+
+# --- gorev_sil testleri ---
+
+def test_arsivlenmis_gorev_silinebilir():
+    gorev = gorev_ekle("Silinecek görev")
+    gorev_arsivle(gorev["id"])
+    sonuc = gorev_sil(gorev["id"])
+    assert sonuc == True
+    assert arsivi_yukle() == []
+
+
+def test_aktif_gorev_silinemez():
+    gorev = gorev_ekle("Aktif görev")
+    with pytest.raises(ValueError):
+        gorev_sil(gorev["id"])
+
+
+def test_tamamlanan_gorev_silinemez():
+    gorev = gorev_ekle("Tamamlanan görev")
+    gorev_tamamla(gorev["id"])
+    with pytest.raises(ValueError):
+        gorev_sil(gorev["id"])
+
+
+def test_olmayan_gorev_silinemez():
+    sonuc = gorev_sil(999)
+    assert sonuc == False
+
+
+def test_silinen_gorev_listede_kalmaz():
+    gorev = gorev_ekle("Silinecek")
+    gorev_arsivle(gorev["id"])
+    gorev_sil(gorev["id"])
+    assert arsivi_yukle() == []
+    assert gorevleri_yukle() == []
+
+
+# --- gorev_duzenle testleri ---
+
+def test_baslik_duzenle():
+    gorev = gorev_ekle("Eski başlık")
+    guncellendi = gorev_duzenle(gorev["id"], baslik="Yeni başlık")
+    assert guncellendi["baslik"] == "Yeni başlık"
+
+
+def test_oncelik_duzenle():
+    gorev = gorev_ekle("Bir görev", oncelik="normal")
+    guncellendi = gorev_duzenle(gorev["id"], oncelik="yuksek")
+    assert guncellendi["oncelik"] == "yuksek"
+
+
+def test_son_tarih_duzenle():
+    gorev = gorev_ekle("Tarihli görev")
+    guncellendi = gorev_duzenle(gorev["id"], son_tarih="2030-01-01")
+    assert guncellendi["son_tarih"] == "2030-01-01"
+
+
+def test_kismi_guncelleme_diger_alanlar_korunur():
+    gorev = gorev_ekle("Başlık", oncelik="yuksek", son_tarih="2030-06-01")
+    guncellendi = gorev_duzenle(gorev["id"], baslik="Yeni başlık")
+    assert guncellendi["oncelik"] == "yuksek"
+    assert guncellendi["son_tarih"] == "2030-06-01"
+    assert guncellendi["durum"] == "aktif"
+
+
+def test_tamamlanmis_gorev_duzenlenebilir():
+    gorev = gorev_ekle("Eski")
+    gorev_tamamla(gorev["id"])
+    guncellendi = gorev_duzenle(gorev["id"], baslik="Güncellendi")
+    assert guncellendi["baslik"] == "Güncellendi"
+    assert guncellendi["durum"] == "tamamlandi"
+
+
+def test_duzenle_gecersiz_oncelik():
+    gorev = gorev_ekle("Görev")
+    with pytest.raises(ValueError):
+        gorev_duzenle(gorev["id"], oncelik="cok_acil")
+
+
+def test_duzenle_bos_baslik():
+    gorev = gorev_ekle("Görev")
+    with pytest.raises(ValueError):
+        gorev_duzenle(gorev["id"], baslik="")
+
+
+def test_duzenle_olmayan_id():
+    sonuc = gorev_duzenle(999, baslik="Bir şey")
+    assert sonuc is None
+
+
+# --- etiket testleri ---
+
+def test_etiketle_gorev_olustur():
+    gorev = gorev_ekle("İş toplantısı", etiketler=["iş", "toplantı"])
+    assert gorev["etiketler"] == "iş,toplantı"
+
+
+def test_etiketsiz_gorev_olustur():
+    gorev = gorev_ekle("Sıradan görev")
+    assert gorev["etiketler"] is None or gorev["etiketler"] == ""
+
+
+def test_birden_fazla_etiket():
+    gorev = gorev_ekle("Çok etiketli", etiketler=["a", "b", "c"])
+    assert "a" in gorev["etiketler"]
+    assert "b" in gorev["etiketler"]
+    assert "c" in gorev["etiketler"]
+
+
+def test_etikete_gore_filtrele():
+    gorev_ekle("İş görevi", etiketler=["iş"])
+    gorev_ekle("Kişisel görev", etiketler=["kişisel"])
+    gorev_ekle("Etiketsiz")
+    sonuclar = etiketlere_gore_filtrele("iş")
+    assert len(sonuclar) == 1
+    assert sonuclar[0]["baslik"] == "İş görevi"
+
+
+def test_etiket_guncelleme():
+    gorev = gorev_ekle("Görev")
+    guncellendi = gorev_duzenle(gorev["id"], etiketler=["yeni", "etiket"])
+    assert "yeni" in guncellendi["etiketler"]
+
+
+def test_etiket_filtre_arsivlenenleri_getirmez():
+    g = gorev_ekle("Arşivlenecek", etiketler=["test"])
+    gorev_arsivle(g["id"])
+    sonuclar = etiketlere_gore_filtrele("test")
+    assert len(sonuclar) == 0
+
+
+# --- gorev_ara testleri ---
+
+def test_basliga_gore_ara():
+    gorev_ekle("Alışveriş listesi")
+    gorev_ekle("İş toplantısı")
+    sonuclar = gorev_ara(q="alışveriş")
+    assert len(sonuclar) == 1
+    assert sonuclar[0]["baslik"] == "Alışveriş listesi"
+
+
+def test_bos_arama_hepsini_doner():
+    gorev_ekle("Birinci")
+    gorev_ekle("İkinci")
+    assert len(gorev_ara()) == 2
+
+
+def test_kucuk_buyuk_harf_duyarsiz_arama():
+    gorev_ekle("Python Dersi")
+    sonuclar = gorev_ara(q="python")
+    assert len(sonuclar) == 1
+
+
+def test_oncelik_filtresi():
+    gorev_ekle("Acil görev", oncelik="yuksek")
+    gorev_ekle("Normal görev", oncelik="normal")
+    sonuclar = gorev_ara(oncelik="yuksek")
+    assert len(sonuclar) == 1
+    assert sonuclar[0]["oncelik"] == "yuksek"
+
+
+def test_etiket_ve_oncelik_kombine_filtre():
+    gorev_ekle("İş + acil", oncelik="yuksek", etiketler=["iş"])
+    gorev_ekle("İş + normal", oncelik="normal", etiketler=["iş"])
+    gorev_ekle("Kişisel + acil", oncelik="yuksek", etiketler=["kişisel"])
+    sonuclar = gorev_ara(oncelik="yuksek", etiket="iş")
+    assert len(sonuclar) == 1
+    assert sonuclar[0]["baslik"] == "İş + acil"
+
+
+def test_arama_arsivlenenleri_getirmez():
+    g = gorev_ekle("Arşivlenmiş görev")
+    gorev_arsivle(g["id"])
+    sonuclar = gorev_ara(q="Arşivlenmiş")
+    assert len(sonuclar) == 0
+
+
+# --- renkli CLI smoke testi ---
+
+def test_renkli_cikti_import_hatasi_vermez():
+    import main  # noqa: F401 — modül yüklenebilmeli
+
+
+# ================================================================
+# Temel güçlendirme: validasyon, edge-case, migration
+# ================================================================
+
+# --- son_tarih validasyon testleri ---
+
+def test_gecersiz_tarih_formati_reddedilir():
+    with pytest.raises(ValueError, match="tarih"):
+        gorev_ekle("Görev", son_tarih="yarın")
+
+
+def test_yanlis_ayirac_tarih_reddedilir():
+    with pytest.raises(ValueError, match="tarih"):
+        gorev_ekle("Görev", son_tarih="2030/06/01")
+
+
+def test_mantiksal_gecersiz_tarih_reddedilir():
+    with pytest.raises(ValueError, match="tarih"):
+        gorev_ekle("Görev", son_tarih="2030-13-01")
+
+
+def test_gecerli_tarih_kabul_edilir():
+    gorev = gorev_ekle("Görev", son_tarih="2030-06-15")
+    assert gorev["son_tarih"] == "2030-06-15"
+
+
+def test_none_tarih_kabul_edilir():
+    gorev = gorev_ekle("Görev", son_tarih=None)
+    assert gorev["son_tarih"] is None
+
+
+def test_duzenle_gecersiz_tarih_reddedilir():
+    gorev = gorev_ekle("Görev")
+    with pytest.raises(ValueError, match="tarih"):
+        gorev_duzenle(gorev["id"], son_tarih="abc")
+
+
+# --- etiket validasyon testleri ---
+
+def test_bos_etiketler_filtrelenir():
+    gorev = gorev_ekle("Görev", etiketler=["", " ", "iş"])
+    assert gorev["etiketler"] == "iş"
+
+
+def test_sadece_bos_etiket_listesi_null_kaydeder():
+    gorev = gorev_ekle("Görev", etiketler=["", "  "])
+    assert not gorev["etiketler"]
+
+
+def test_cok_uzun_etiket_reddedilir():
+    with pytest.raises(ValueError, match="[Ee]tiket"):
+        gorev_ekle("Görev", etiketler=["x" * 51])
+
+
+def test_virgul_iceren_etiket_reddedilir():
+    with pytest.raises(ValueError, match="[Ee]tiket"):
+        gorev_ekle("Görev", etiketler=["iş,acil"])
+
+
+# --- gorev_ara edge-case testleri ---
+
+def test_ara_yuzde_karakteri_literal_arar():
+    gorev_ekle("50% indirim")
+    gorev_ekle("Normal görev")
+    sonuclar = gorev_ara(q="50%")
+    assert len(sonuclar) == 1
+    assert "50%" in sonuclar[0]["baslik"]
+
+
+def test_ara_alt_cizgi_literal_arar():
+    gorev_ekle("proje_raporu")
+    gorev_ekle("proje raporu")
+    sonuclar = gorev_ara(q="proje_raporu")
+    assert len(sonuclar) == 1
+
+
+# --- migration / şema versiyon testleri ---
+
+def test_db_versiyonu_pozitif_tam_sayi():
+    gorevleri_yukle()  # DB'yi başlat
+    v = db_versiyonu()
+    assert isinstance(v, int)
+    assert v >= 1
+
+
+def test_db_versiyonu_tekrar_cagrilinca_degismez():
+    gorevleri_yukle()
+    v1 = db_versiyonu()
+    v2 = db_versiyonu()
+    assert v1 == v2
 
 
 # --- kenar durum testleri ---

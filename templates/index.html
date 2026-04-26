@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task Tracer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #222; }
+    header { background: #2563eb; color: #fff; padding: 1rem 2rem; display: flex; align-items: center; gap: 1rem; }
+    header h1 { font-size: 1.4rem; }
+    .container { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    .card { background: #fff; border-radius: 8px; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,.1); margin-bottom: 1.5rem; }
+    h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: #555; text-transform: uppercase; letter-spacing: .05em; }
+    form.add-form { display: flex; gap: .5rem; flex-wrap: wrap; }
+    form.add-form input, form.add-form select { padding: .5rem .75rem; border: 1px solid #ddd; border-radius: 6px; font-size: .95rem; }
+    form.add-form input[name=baslik] { flex: 1; min-width: 160px; }
+    form.add-form button { background: #2563eb; color: #fff; border: none; border-radius: 6px; padding: .5rem 1.2rem; cursor: pointer; font-size: .95rem; }
+    form.add-form button:hover { background: #1d4ed8; }
+    .search-row { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .search-row input, .search-row select { padding: .45rem .7rem; border: 1px solid #ddd; border-radius: 6px; font-size: .9rem; }
+    .search-row input { flex: 1; min-width: 140px; }
+    .tabs { display: flex; gap: .5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .tab { padding: .4rem .9rem; border-radius: 20px; border: 1px solid #ddd; background: #fff; cursor: pointer; font-size: .88rem; }
+    .tab.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: .8rem; color: #888; padding: .4rem .6rem; border-bottom: 1px solid #eee; }
+    td { padding: .6rem .6rem; border-bottom: 1px solid #f0f0f0; font-size: .93rem; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr.tamamlandi td { color: #999; text-decoration: line-through; }
+    .badge { display: inline-block; padding: .15rem .55rem; border-radius: 12px; font-size: .78rem; font-weight: 600; }
+    .badge.yuksek { background: #fee2e2; color: #b91c1c; }
+    .badge.normal  { background: #fef9c3; color: #92400e; }
+    .badge.dusuk   { background: #dcfce7; color: #166534; }
+    .tag { display: inline-block; padding: .1rem .4rem; border-radius: 10px; background: #e0e7ff; color: #3730a3; font-size: .75rem; margin-right: .2rem; }
+    .actions button { background: none; border: 1px solid #ddd; border-radius: 5px; padding: .25rem .55rem; cursor: pointer; font-size: .8rem; margin-right: .2rem; }
+    .actions button:hover { background: #f3f4f6; }
+    .actions button.danger:hover { background: #fee2e2; border-color: #f87171; color: #b91c1c; }
+    .empty { color: #aaa; font-size: .9rem; padding: 1rem 0; }
+    #msg { position: fixed; top: 1rem; right: 1rem; background: #22c55e; color: #fff; padding: .6rem 1.2rem; border-radius: 8px; display: none; font-size: .9rem; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Task Tracer</h1>
+  <span style="font-size:.9rem;opacity:.8">Görev Yöneticisi</span>
+</header>
+
+<div id="msg"></div>
+
+<div class="container">
+  <!-- Görev Ekle -->
+  <div class="card">
+    <h2>Yeni Görev</h2>
+    <form class="add-form" id="addForm">
+      <input name="baslik" type="text" placeholder="Görev başlığı..." required>
+      <select name="oncelik">
+        <option value="normal">Normal</option>
+        <option value="dusuk">Düşük</option>
+        <option value="yuksek">Yüksek</option>
+      </select>
+      <input name="son_tarih" type="date" title="Son tarih (opsiyonel)">
+      <input name="etiketler" type="text" placeholder="etiket1,etiket2" title="Etiketler virgülle ayrılmış">
+      <button type="submit">+ Ekle</button>
+    </form>
+  </div>
+
+  <!-- Liste -->
+  <div class="card">
+    <div class="search-row">
+      <input id="q" type="text" placeholder="Başlıkta ara...">
+      <select id="filtrOncelik">
+        <option value="">Tüm öncelikler</option>
+        <option value="yuksek">Yüksek</option>
+        <option value="normal">Normal</option>
+        <option value="dusuk">Düşük</option>
+      </select>
+      <input id="filtrEtiket" type="text" placeholder="Etiket filtrele">
+      <button onclick="aramaYap()" style="background:#6b7280;color:#fff;border:none;border-radius:6px;padding:.45rem .9rem;cursor:pointer;font-size:.9rem">Ara</button>
+    </div>
+    <div class="tabs">
+      <button class="tab active" onclick="sekmeDegistir(this,'tum')">Tümü</button>
+      <button class="tab" onclick="sekmeDegistir(this,'bugun')">Bugün</button>
+      <button class="tab" onclick="sekmeDegistir(this,'gecmis')">Gecikmiş</button>
+      <button class="tab" onclick="sekmeDegistir(this,'yaklasan')">Bu Hafta</button>
+      <button class="tab" onclick="sekmeDegistir(this,'arsiv')">Arşiv</button>
+    </div>
+
+    <table id="gorevTable">
+      <thead>
+        <tr><th>#</th><th>Başlık</th><th>Öncelik</th><th>Etiketler</th><th>Son Tarih</th><th>İşlemler</th></tr>
+      </thead>
+      <tbody id="gorevBody"></tbody>
+    </table>
+    <div id="emptyMsg" class="empty" style="display:none">Görev bulunamadı.</div>
+  </div>
+</div>
+
+<script>
+let mevcutSekme = 'tum';
+
+function flash(msg, renk='#22c55e') {
+  const el = document.getElementById('msg');
+  el.textContent = msg;
+  el.style.background = renk;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 2500);
+}
+
+function badgeHTML(oncelik) {
+  return `<span class="badge ${oncelik}">${oncelik}</span>`;
+}
+
+function etiketHTML(etiketler) {
+  if (!etiketler) return '';
+  return etiketler.split(',').map(e => `<span class="tag">${e.trim()}</span>`).join('');
+}
+
+function renderGorevler(gorevler, arsivMi=false) {
+  const tbody = document.getElementById('gorevBody');
+  const emptyMsg = document.getElementById('emptyMsg');
+  tbody.innerHTML = '';
+  if (!gorevler.length) { emptyMsg.style.display='block'; return; }
+  emptyMsg.style.display = 'none';
+  gorevler.forEach((g, i) => {
+    const tr = document.createElement('tr');
+    if (g.durum === 'tamamlandi') tr.className = 'tamamlandi';
+    const tarih = g.son_tarih || '-';
+    const islemler = arsivMi
+      ? `<div class="actions">
+           <button onclick="aktifeal(${g.id})">Aktife Al</button>
+           <button class="danger" onclick="kaliciSil(${g.id})">Sil</button>
+         </div>`
+      : `<div class="actions">
+           ${g.durum !== 'tamamlandi' ? `<button onclick="tamamla(${g.id})">✓ Tamamla</button>` : ''}
+           <button onclick="arsivle(${g.id})">Arşivle</button>
+         </div>`;
+    tr.innerHTML = `
+      <td>${i+1}</td>
+      <td>${g.baslik}</td>
+      <td>${badgeHTML(g.oncelik)}</td>
+      <td>${etiketHTML(g.etiketler)}</td>
+      <td>${tarih}</td>
+      <td>${islemler}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+async function gorevlerYukle() {
+  const q = document.getElementById('q').value.trim();
+  const oncelik = document.getElementById('filtrOncelik').value;
+  const etiket = document.getElementById('filtrEtiket').value.trim();
+  let url;
+  if (mevcutSekme === 'arsiv') {
+    url = '/arsiv';
+  } else if (mevcutSekme === 'bugun') {
+    url = '/gorevler/bugun';
+  } else if (mevcutSekme === 'gecmis') {
+    url = '/gorevler/gecmis';
+  } else if (mevcutSekme === 'yaklasan') {
+    url = '/gorevler/yaklasan?gun=7';
+  } else if (q || oncelik || etiket) {
+    const ps = new URLSearchParams();
+    if (q) ps.set('q', q);
+    if (oncelik) ps.set('oncelik', oncelik);
+    if (etiket) ps.set('etiket', etiket);
+    url = '/gorevler/ara?' + ps.toString();
+  } else {
+    url = '/gorevler';
+  }
+  const r = await fetch(url);
+  const data = await r.json();
+  renderGorevler(data, mevcutSekme === 'arsiv');
+}
+
+function sekmeDegistir(btn, sekme) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  mevcutSekme = sekme;
+  gorevlerYukle();
+}
+
+function aramaYap() {
+  mevcutSekme = 'tum';
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelector('.tab').classList.add('active');
+  gorevlerYukle();
+}
+
+document.getElementById('addForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const etiketStr = fd.get('etiketler').trim();
+  const body = {
+    baslik: fd.get('baslik'),
+    oncelik: fd.get('oncelik'),
+    son_tarih: fd.get('son_tarih') || null,
+    etiketler: etiketStr ? etiketStr.split(',').map(s=>s.trim()).filter(Boolean) : null,
+  };
+  const r = await fetch('/gorevler', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (r.ok) { e.target.reset(); flash('Görev eklendi!'); gorevlerYukle(); }
+  else flash('Hata: ' + (await r.json()).detail, '#ef4444');
+});
+
+async function tamamla(id) {
+  await fetch(`/gorevler/${id}/tamamla`, {method:'PUT'});
+  flash('Tamamlandı!');
+  gorevlerYukle();
+}
+
+async function arsivle(id) {
+  await fetch(`/gorevler/${id}/arsivle`, {method:'PUT'});
+  flash('Arşivlendi.', '#6b7280');
+  gorevlerYukle();
+}
+
+async function aktifeal(id) {
+  await fetch(`/gorevler/${id}/aktife-al`, {method:'PUT'});
+  flash('Aktife alındı!');
+  gorevlerYukle();
+}
+
+async function kaliciSil(id) {
+  if (!confirm('Bu görev kalıcı olarak silinecek. Emin misiniz?')) return;
+  const r = await fetch(`/gorevler/${id}`, {method:'DELETE'});
+  if (r.ok) { flash('Silindi.', '#ef4444'); gorevlerYukle(); }
+  else flash('Hata: sadece arşivlenenler silinebilir.', '#ef4444');
+}
+
+gorevlerYukle();
+</script>
+</body>
+</html>
