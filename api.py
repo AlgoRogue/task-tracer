@@ -9,8 +9,12 @@ from tasks import (
     gorev_aktife_al, gorev_sil, gorev_duzenle,
     gorev_ara, etiketlere_gore_filtrele,
     gorevleri_yukle, arsivi_yukle,
-    bugunun_gorevleri, gecmis_gorevler, yaklasan_gorevler
+    bugunun_gorevleri, gecmis_gorevler, yaklasan_gorevler,
+    bildirimleri_yukle, bildirimi_goruldu_isaretle,
+    gunluk_skor_getir, skor_gecmisini_getir,
+    ajan_olaylarini_getir,
 )
+from agents import run_all_agents, run_agent
 
 app = FastAPI(title="Task Tracer API")
 
@@ -117,3 +121,49 @@ def gecmis():
 @app.get("/gorevler/yaklasan")
 def yaklasan(gun: int = 7):
     return yaklasan_gorevler(gun)
+
+
+@app.get("/bildirimler")
+def bildirimleri_getir(tur: Optional[str] = None, goruldu: Optional[int] = None):
+    return bildirimleri_yukle(tur=tur, goruldu_mu=goruldu)
+
+
+@app.put("/bildirimler/{bildirim_id}/goruldu")
+def bildirimi_okundu_isaretle(bildirim_id: int):
+    if not bildirimi_goruldu_isaretle(bildirim_id):
+        raise HTTPException(status_code=404, detail="Bildirim bulunamadı")
+    return {"ok": True}
+
+
+@app.get("/skor")
+def gunluk_skor(tarih: Optional[str] = None):
+    skor = gunluk_skor_getir(tarih)
+    if skor is None:
+        from agents.skor import SkorAjan
+        SkorAjan().calistir()
+        skor = gunluk_skor_getir(tarih)
+    return skor or {}
+
+
+@app.get("/skor/gecmis")
+def skor_gecmisi_getir(limit: int = 30):
+    return skor_gecmisini_getir(limit=limit)
+
+
+class AjanCalistirGirdisi(BaseModel):
+    ajan: str = "hepsi"
+
+
+@app.post("/ajanlar/calistir")
+def ajanlari_calistir(veri: AjanCalistirGirdisi):
+    try:
+        if veri.ajan == "hepsi":
+            return run_all_agents()
+        return run_agent(veri.ajan)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/ajanlar/olaylar")
+def ajan_olaylari_getir(ajan_adi: Optional[str] = None, limit: int = 50):
+    return ajan_olaylarini_getir(ajan_adi=ajan_adi, limit=limit)

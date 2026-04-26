@@ -24,6 +24,41 @@ _MIGRASYONLAR = [
             etiketler   TEXT
         )
     """),
+    (2, """
+        CREATE TABLE IF NOT EXISTS bildirimler (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            gorev_id    INTEGER,
+            tur         TEXT NOT NULL,
+            mesaj       TEXT NOT NULL,
+            olusturulma TEXT NOT NULL,
+            goruldu_mu  INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY (gorev_id) REFERENCES gorevler(id) ON DELETE SET NULL
+        )
+    """),
+    (3, """
+        CREATE TABLE IF NOT EXISTS skor_gecmisi (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            tarih             TEXT NOT NULL UNIQUE,
+            tamamlanan_sayi   INTEGER NOT NULL DEFAULT 0,
+            toplam_aktif_sayi INTEGER NOT NULL DEFAULT 0,
+            zamaninda_sayi    INTEGER NOT NULL DEFAULT 0,
+            gec_tamamlanan    INTEGER NOT NULL DEFAULT 0,
+            tamamlanma_orani  REAL    NOT NULL DEFAULT 0.0,
+            zamaninda_orani   REAL    NOT NULL DEFAULT 0.0,
+            seri              INTEGER NOT NULL DEFAULT 0,
+            hesaplanma        TEXT NOT NULL
+        )
+    """),
+    (4, """
+        CREATE TABLE IF NOT EXISTS ajan_olaylari (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            ajan_adi    TEXT NOT NULL,
+            olay_turu   TEXT NOT NULL,
+            mesaj       TEXT NOT NULL,
+            meta        TEXT,
+            olusturulma TEXT NOT NULL
+        )
+    """),
 ]
 
 
@@ -279,3 +314,119 @@ def gorev_sil(gorev_id):
             raise ValueError("Sadece arşivlenmiş görevler kalıcı olarak silinebilir.")
         con.execute("DELETE FROM gorevler WHERE id = ?", (gorev_id,))
     return True
+
+
+# --- bildirimler ---
+
+def bildirim_ekle(gorev_id, tur, mesaj):
+    _init_db()
+    with _baglan() as con:
+        cur = con.execute(
+            "INSERT INTO bildirimler (gorev_id, tur, mesaj, olusturulma) VALUES (?, ?, ?, ?)",
+            (gorev_id, tur, mesaj, _simdi())
+        )
+    return cur.lastrowid
+
+
+def _bildirim_var_mi(gorev_id, tur):
+    _init_db()
+    with _baglan() as con:
+        row = con.execute(
+            "SELECT id FROM bildirimler WHERE gorev_id = ? AND tur = ? AND olusturulma LIKE ?",
+            (gorev_id, tur, f"{_bugun()}%")
+        ).fetchone()
+    return row is not None
+
+
+def bildirimleri_yukle(tur=None, goruldu_mu=None):
+    _init_db()
+    kosullar, parametreler = [], []
+    if tur is not None:
+        kosullar.append("tur = ?")
+        parametreler.append(tur)
+    if goruldu_mu is not None:
+        kosullar.append("goruldu_mu = ?")
+        parametreler.append(goruldu_mu)
+    sorgu = "SELECT * FROM bildirimler"
+    if kosullar:
+        sorgu += " WHERE " + " AND ".join(kosullar)
+    sorgu += " ORDER BY olusturulma DESC"
+    with _baglan() as con:
+        rows = con.execute(sorgu, parametreler).fetchall()
+    return [dict(r) for r in rows]
+
+
+def bildirimi_goruldu_isaretle(bildirim_id):
+    _init_db()
+    with _baglan() as con:
+        etkilenen = con.execute(
+            "UPDATE bildirimler SET goruldu_mu = 1 WHERE id = ?",
+            (bildirim_id,)
+        ).rowcount
+    return etkilenen > 0
+
+
+# --- skor_gecmisi ---
+
+def gunluk_skor_kaydet(tarih, tamamlanan_sayi, toplam_aktif_sayi,
+                        zamaninda_sayi, gec_tamamlanan,
+                        tamamlanma_orani, zamaninda_orani, seri):
+    _init_db()
+    with _baglan() as con:
+        con.execute(
+            """INSERT OR REPLACE INTO skor_gecmisi
+               (tarih, tamamlanan_sayi, toplam_aktif_sayi, zamaninda_sayi,
+                gec_tamamlanan, tamamlanma_orani, zamaninda_orani, seri, hesaplanma)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (tarih, tamamlanan_sayi, toplam_aktif_sayi, zamaninda_sayi,
+             gec_tamamlanan, tamamlanma_orani, zamaninda_orani, seri, _simdi())
+        )
+
+
+def gunluk_skor_getir(tarih=None):
+    _init_db()
+    hedef = tarih or _bugun()
+    with _baglan() as con:
+        row = con.execute(
+            "SELECT * FROM skor_gecmisi WHERE tarih = ?", (hedef,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def skor_gecmisini_getir(limit=30):
+    _init_db()
+    with _baglan() as con:
+        rows = con.execute(
+            "SELECT * FROM skor_gecmisi ORDER BY tarih DESC LIMIT ?", (limit,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+# --- ajan_olaylari ---
+
+def ajan_olayi_kaydet(ajan_adi, olay_turu, mesaj, meta=None):
+    import json
+    _init_db()
+    meta_str = json.dumps(meta, ensure_ascii=False) if meta is not None else None
+    with _baglan() as con:
+        con.execute(
+            "INSERT INTO ajan_olaylari (ajan_adi, olay_turu, mesaj, meta, olusturulma) VALUES (?, ?, ?, ?, ?)",
+            (ajan_adi, olay_turu, mesaj, meta_str, _simdi())
+        )
+
+
+def ajan_olaylarini_getir(ajan_adi=None, limit=50):
+    _init_db()
+    if ajan_adi:
+        with _baglan() as con:
+            rows = con.execute(
+                "SELECT * FROM ajan_olaylari WHERE ajan_adi = ? ORDER BY olusturulma DESC LIMIT ?",
+                (ajan_adi, limit)
+            ).fetchall()
+    else:
+        with _baglan() as con:
+            rows = con.execute(
+                "SELECT * FROM ajan_olaylari ORDER BY olusturulma DESC LIMIT ?",
+                (limit,)
+            ).fetchall()
+    return [dict(r) for r in rows]
