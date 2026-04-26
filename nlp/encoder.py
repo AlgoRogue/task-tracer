@@ -30,6 +30,9 @@ _NIYET_REFERANS = {
     "gorev_arsivle": [
         "arşivle kaldır sil iptal et",
         "arşivlendi iptal artık gerekmiyor",
+        "görevi arşivle arşive taşı kaldır",
+        "artık gerekmiyor arşive al devre dışı",
+        "iptal et vazgeç arşivle bitir",
     ],
     "gorev_listele": [
         "listele göster tümünü hepsini",
