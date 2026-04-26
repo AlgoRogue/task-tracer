@@ -314,6 +314,12 @@ def test_silinen_gorev_listede_kalmaz():
     assert gorevleri_yukle() == []
 
 
+# --- renkli CLI smoke testi ---
+
+def test_renkli_cikti_import_hatasi_vermez():
+    import main  # noqa: F401 — modül yüklenebilmeli
+
+
 # --- kenar durum testleri ---
 
 def test_db_olmadan_cokturmez(tmp_path, monkeypatch):

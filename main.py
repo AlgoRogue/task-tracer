@@ -1,4 +1,22 @@
-from tasks import gorev_ekle, gorev_tamamla, gorev_arsivle, gorev_aktife_al, gorev_sil, gorevleri_yukle, arsivi_yukle
+from colorama import init, Fore, Style
+from tasks import (
+    gorev_ekle, gorev_tamamla, gorev_arsivle,
+    gorev_aktife_al, gorev_sil,
+    gorevleri_yukle, arsivi_yukle,
+)
+
+init(autoreset=True)
+
+_ONCELIK_RENK = {
+    "yuksek": Fore.RED,
+    "normal": Fore.YELLOW,
+    "dusuk":  Fore.GREEN,
+}
+
+
+def _oncelik_str(oncelik):
+    renk = _ONCELIK_RENK.get(oncelik, "")
+    return f"{renk}[{oncelik}]{Style.RESET_ALL}"
 
 
 def sira_no_to_id(sira_no):
@@ -16,9 +34,12 @@ def gorevleri_goster():
         return
     print("\n--- GÖREVLER ---")
     for sira, g in enumerate(gorevler, start=1):
-        durum = "✓" if g.get("durum") == "tamamlandi" else "○"
-        oncelik = g.get("oncelik", "normal")
-        print(f"  [{durum}] {sira}.  {g['baslik']}  [{oncelik}]")
+        tamamlandi = g.get("durum") == "tamamlandi"
+        durum_simge = f"{Fore.GREEN}✓{Style.RESET_ALL}" if tamamlandi else f"{Fore.CYAN}○{Style.RESET_ALL}"
+        baslik = f"{Style.DIM}{g['baslik']}{Style.RESET_ALL}" if tamamlandi else g["baslik"]
+        oncelik = _oncelik_str(g.get("oncelik", "normal"))
+        son_tarih = f"  {Fore.MAGENTA}→ {g['son_tarih']}{Style.RESET_ALL}" if g.get("son_tarih") else ""
+        print(f"  [{durum_simge}] {sira}.  {baslik}  {oncelik}{son_tarih}")
     print()
 
 
@@ -28,10 +49,11 @@ def arsivi_goster():
         print("Arşiv boş.")
         return
     print("\n--- ARŞİV ---")
-    for g in arsiv:
-        durum = "✓" if g.get("tamamlanma") else "○"
+    for sira, g in enumerate(arsiv, start=1):
+        durum = f"{Fore.GREEN}✓{Style.RESET_ALL}" if g.get("tamamlanma") else f"{Fore.CYAN}○{Style.RESET_ALL}"
         tarih = g.get("arsivlenme", "-")
-        print(f"  [{durum}] {g['baslik']}  [{g.get('oncelik','normal')}]  {tarih}")
+        oncelik = _oncelik_str(g.get("oncelik", "normal"))
+        print(f"  [{durum}] {sira}. {Style.DIM}{g['baslik']}{Style.RESET_ALL}  {oncelik}  {tarih}")
     print()
 
 
@@ -46,13 +68,14 @@ def aktif_olmayan_gorevleri_goster():
     print("\n--- AKTİFE ALINABİLECEK GÖREVLER ---")
     for sira, g in enumerate(liste, start=1):
         etiket = "tamamlandı" if g.get("durum") == "tamamlandi" else "arşivlendi"
-        print(f"  {sira}. {g['baslik']}  [{etiket}]")
+        renk = Fore.GREEN if etiket == "tamamlandı" else Fore.BLUE
+        print(f"  {sira}. {g['baslik']}  {renk}[{etiket}]{Style.RESET_ALL}")
     print()
     return liste
 
 
 def menu():
-    print("\n=== GÖREV YÖNETİCİSİ ===")
+    print(f"\n{Fore.CYAN}=== GÖREV YÖNETİCİSİ ==={Style.RESET_ALL}")
     print("1. Görev ekle")
     print("2. Görevi tamamla")
     print("3. Görevi arşivle")
@@ -65,7 +88,7 @@ def menu():
 
 
 def main():
-    print("Hoş geldin!")
+    print(f"{Fore.CYAN}Hoş geldin!{Style.RESET_ALL}")
     while True:
         secim = menu()
 
@@ -74,9 +97,9 @@ def main():
             oncelik = input("Öncelik (dusuk / normal / yuksek) [varsayılan: normal]: ").strip() or "normal"
             try:
                 gorev = gorev_ekle(baslik, oncelik)
-                print(f"Eklendi: {gorev['baslik']} | Öncelik: {gorev['oncelik']}")
+                print(f"{Fore.GREEN}Eklendi:{Style.RESET_ALL} {gorev['baslik']} | Öncelik: {_oncelik_str(gorev['oncelik'])}")
             except ValueError as e:
-                print(f"Hata: {e}")
+                print(f"{Fore.RED}Hata:{Style.RESET_ALL} {e}")
 
         elif secim == "2":
             gorevleri_goster()
@@ -84,15 +107,15 @@ def main():
                 sira = int(input("Tamamlanacak görev sıra no: "))
                 gorev_id = sira_no_to_id(sira)
                 if not gorev_id:
-                    print("Geçersiz sıra numarası.")
+                    print(f"{Fore.RED}Geçersiz sıra numarası.{Style.RESET_ALL}")
                 else:
                     gorev = gorevleri_yukle()[sira - 1]
                     if gorev.get("durum") == "tamamlandi":
                         print("Bu görev zaten tamamlanmış.")
                     elif gorev_tamamla(gorev_id):
-                        print("Görev tamamlandı!")
+                        print(f"{Fore.GREEN}Görev tamamlandı!{Style.RESET_ALL}")
             except ValueError:
-                print("Geçersiz giriş.")
+                print(f"{Fore.RED}Geçersiz giriş.{Style.RESET_ALL}")
 
         elif secim == "3":
             gorevleri_goster()
@@ -100,11 +123,11 @@ def main():
                 sira = int(input("Arşivlenecek görev sıra no: "))
                 gorev_id = sira_no_to_id(sira)
                 if gorev_id and gorev_arsivle(gorev_id):
-                    print("Görev arşivlendi.")
+                    print(f"{Fore.BLUE}Görev arşivlendi.{Style.RESET_ALL}")
                 else:
-                    print("Geçersiz sıra numarası.")
+                    print(f"{Fore.RED}Geçersiz sıra numarası.{Style.RESET_ALL}")
             except ValueError:
-                print("Geçersiz giriş.")
+                print(f"{Fore.RED}Geçersiz giriş.{Style.RESET_ALL}")
 
         elif secim == "4":
             gorevleri_goster()
@@ -120,11 +143,11 @@ def main():
                     if 1 <= sira <= len(liste):
                         gorev_id = liste[sira - 1]["id"]
                         if gorev_aktife_al(gorev_id):
-                            print("Görev aktife alındı.")
+                            print(f"{Fore.GREEN}Görev aktife alındı.{Style.RESET_ALL}")
                     else:
-                        print("Geçersiz sıra numarası.")
+                        print(f"{Fore.RED}Geçersiz sıra numarası.{Style.RESET_ALL}")
                 except ValueError:
-                    print("Geçersiz giriş.")
+                    print(f"{Fore.RED}Geçersiz giriş.{Style.RESET_ALL}")
 
         elif secim == "7":
             arsivi_goster()
@@ -134,23 +157,23 @@ def main():
                     sira = int(input("Kalıcı silinecek görev sıra no: "))
                     if 1 <= sira <= len(arsiv):
                         gorev_id = arsiv[sira - 1]["id"]
-                        onay = input(f"'{arsiv[sira-1]['baslik']}' kalıcı silinsin mi? (e/h): ").strip().lower()
+                        onay = input(f"{Fore.RED}'{arsiv[sira-1]['baslik']}' kalıcı silinsin mi? (e/h):{Style.RESET_ALL} ").strip().lower()
                         if onay == "e":
                             gorev_sil(gorev_id)
-                            print("Görev kalıcı olarak silindi.")
+                            print(f"{Fore.RED}Görev kalıcı olarak silindi.{Style.RESET_ALL}")
                         else:
                             print("İptal edildi.")
                     else:
-                        print("Geçersiz sıra numarası.")
+                        print(f"{Fore.RED}Geçersiz sıra numarası.{Style.RESET_ALL}")
                 except ValueError:
-                    print("Geçersiz giriş.")
+                    print(f"{Fore.RED}Geçersiz giriş.{Style.RESET_ALL}")
 
         elif secim == "0":
-            print("Görüşürüz!")
+            print(f"{Fore.CYAN}Görüşürüz!{Style.RESET_ALL}")
             break
 
         else:
-            print("Geçersiz seçim.")
+            print(f"{Fore.RED}Geçersiz seçim.{Style.RESET_ALL}")
 
 
 if __name__ == "__main__":
