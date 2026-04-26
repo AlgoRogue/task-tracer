@@ -4,3 +4,7 @@ httpx
 pytest==9.0.3
 colorama
 jinja2
+
+# Encoder model için (opsiyonel — kurulmadan stub ile çalışır):
+# pip install transformers torch --index-url https://download.pytorch.org/whl/cpu
+# pip install huggingface-hub  # model_indir.py için

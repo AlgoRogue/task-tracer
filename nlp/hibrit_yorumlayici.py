@@ -8,9 +8,10 @@ Karar mantığı:
 """
 from nlp import kural_motoru
 from nlp.encoder import Encoder
+from nlp import model_ayar as _ma
 
 _ENCODER_ESIGI = 0.45   # Encoder bu eşiğin altındaysa göz ardı edilir
-_varsayilan_encoder = Encoder()
+_varsayilan_encoder = Encoder(model_yolu=_ma.model_yolu_bul())
 
 
 def yorumla(girdi: str, encoder: Encoder = None, _bugun=None) -> dict:

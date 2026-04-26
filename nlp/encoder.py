@@ -165,8 +165,9 @@ class Encoder:
         return "gercek" if self._gercek else "stub"
 
 
-# Varsayılan örnek — gerçek model URL'i verilmeden oluşturulur
-_varsayilan = Encoder()
+# Varsayılan örnek — model_ayar üzerinden otomatik keşif
+from nlp import model_ayar as _ma
+_varsayilan = Encoder(model_yolu=_ma.model_yolu_bul())
 
 
 def siniflandir(girdi: str) -> dict:

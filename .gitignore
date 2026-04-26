@@ -171,3 +171,6 @@ cython_debug/
 .pypirc
 tasks.json
 tasks.db
+
+# Encoder model dosyaları (büyük binary, repoya girmez)
+models/
