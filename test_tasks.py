@@ -3,7 +3,7 @@ import pytest
 from datetime import date, timedelta
 from tasks import (
     gorev_ekle, gorev_tamamla, gorev_arsivle, gorev_aktife_al,
-    gorev_sil, gorev_duzenle, etiketlere_gore_filtrele,
+    gorev_sil, gorev_duzenle, etiketlere_gore_filtrele, gorev_ara,
     gorevleri_yukle, arsivi_yukle,
     bugunun_gorevleri, gecmis_gorevler, yaklasan_gorevler,
     DB
@@ -405,6 +405,52 @@ def test_etiket_filtre_arsivlenenleri_getirmez():
     g = gorev_ekle("Arşivlenecek", etiketler=["test"])
     gorev_arsivle(g["id"])
     sonuclar = etiketlere_gore_filtrele("test")
+    assert len(sonuclar) == 0
+
+
+# --- gorev_ara testleri ---
+
+def test_basliga_gore_ara():
+    gorev_ekle("Alışveriş listesi")
+    gorev_ekle("İş toplantısı")
+    sonuclar = gorev_ara(q="alışveriş")
+    assert len(sonuclar) == 1
+    assert sonuclar[0]["baslik"] == "Alışveriş listesi"
+
+
+def test_bos_arama_hepsini_doner():
+    gorev_ekle("Birinci")
+    gorev_ekle("İkinci")
+    assert len(gorev_ara()) == 2
+
+
+def test_kucuk_buyuk_harf_duyarsiz_arama():
+    gorev_ekle("Python Dersi")
+    sonuclar = gorev_ara(q="python")
+    assert len(sonuclar) == 1
+
+
+def test_oncelik_filtresi():
+    gorev_ekle("Acil görev", oncelik="yuksek")
+    gorev_ekle("Normal görev", oncelik="normal")
+    sonuclar = gorev_ara(oncelik="yuksek")
+    assert len(sonuclar) == 1
+    assert sonuclar[0]["oncelik"] == "yuksek"
+
+
+def test_etiket_ve_oncelik_kombine_filtre():
+    gorev_ekle("İş + acil", oncelik="yuksek", etiketler=["iş"])
+    gorev_ekle("İş + normal", oncelik="normal", etiketler=["iş"])
+    gorev_ekle("Kişisel + acil", oncelik="yuksek", etiketler=["kişisel"])
+    sonuclar = gorev_ara(oncelik="yuksek", etiket="iş")
+    assert len(sonuclar) == 1
+    assert sonuclar[0]["baslik"] == "İş + acil"
+
+
+def test_arama_arsivlenenleri_getirmez():
+    g = gorev_ekle("Arşivlenmiş görev")
+    gorev_arsivle(g["id"])
+    sonuclar = gorev_ara(q="Arşivlenmiş")
     assert len(sonuclar) == 0
 
 

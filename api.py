@@ -3,7 +3,8 @@ from pydantic import BaseModel
 from typing import Optional, List
 from tasks import (
     gorev_ekle, gorev_tamamla, gorev_arsivle,
-    gorev_aktife_al, gorev_sil, gorev_duzenle, etiketlere_gore_filtrele,
+    gorev_aktife_al, gorev_sil, gorev_duzenle,
+    gorev_ara, etiketlere_gore_filtrele,
     gorevleri_yukle, arsivi_yukle,
     bugunun_gorevleri, gecmis_gorevler, yaklasan_gorevler
 )
@@ -80,6 +81,11 @@ def gorevi_sil(gorev_id: int):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"ok": True}
+
+
+@app.get("/gorevler/ara")
+def gorevleri_ara(q: Optional[str] = None, oncelik: Optional[str] = None, etiket: Optional[str] = None):
+    return gorev_ara(q=q, oncelik=oncelik, etiket=etiket)
 
 
 @app.get("/arsiv")

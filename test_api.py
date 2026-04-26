@@ -208,3 +208,26 @@ def test_etiket_filtre_endpoint():
     r = client.get("/gorevler?etiket=iş")
     assert len(r.json()) == 1
     assert r.json()[0]["baslik"] == "İş görevi"
+
+
+# --- arama endpoint ---
+
+def test_arama_endpoint_q():
+    client.post("/gorevler", json={"baslik": "Alışveriş"})
+    client.post("/gorevler", json={"baslik": "Toplantı"})
+    r = client.get("/gorevler/ara?q=alışveriş")
+    assert len(r.json()) == 1
+
+
+def test_arama_endpoint_oncelik():
+    client.post("/gorevler", json={"baslik": "Acil", "oncelik": "yuksek"})
+    client.post("/gorevler", json={"baslik": "Normal", "oncelik": "normal"})
+    r = client.get("/gorevler/ara?oncelik=yuksek")
+    assert len(r.json()) == 1
+
+
+def test_arama_endpoint_bos_hepsini_doner():
+    client.post("/gorevler", json={"baslik": "A"})
+    client.post("/gorevler", json={"baslik": "B"})
+    r = client.get("/gorevler/ara")
+    assert len(r.json()) == 2

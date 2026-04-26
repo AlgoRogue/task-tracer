@@ -1,7 +1,7 @@
 from colorama import init, Fore, Style
 from tasks import (
     gorev_ekle, gorev_tamamla, gorev_arsivle,
-    gorev_aktife_al, gorev_sil, gorev_duzenle,
+    gorev_aktife_al, gorev_sil, gorev_duzenle, gorev_ara,
     gorevleri_yukle, arsivi_yukle,
 )
 
@@ -84,6 +84,7 @@ def menu():
     print("6. Görevi aktife al")
     print("7. Arşivden kalıcı sil")
     print("8. Görevi düzenle")
+    print("9. Görev ara / filtrele")
     print("0. Çıkış")
     return input("Seçim: ").strip()
 
@@ -187,6 +188,22 @@ def main():
                         print(f"{Fore.RED}Hata:{Style.RESET_ALL} {e}")
             except ValueError:
                 print(f"{Fore.RED}Geçersiz giriş.{Style.RESET_ALL}")
+
+        elif secim == "9":
+            arama = input("Arama terimi (boş=hepsi): ").strip() or None
+            oncelik_filtre = input("Öncelik filtresi dusuk/normal/yuksek (boş=hepsi): ").strip() or None
+            etiket_filtre = input("Etiket filtresi (boş=hepsi): ").strip() or None
+            sonuclar = gorev_ara(q=arama, oncelik=oncelik_filtre, etiket=etiket_filtre)
+            if not sonuclar:
+                print("Sonuç bulunamadı.")
+            else:
+                print(f"\n--- ARAMA SONUÇLARI ({len(sonuclar)}) ---")
+                for sira, g in enumerate(sonuclar, start=1):
+                    durum = f"{Fore.GREEN}✓{Style.RESET_ALL}" if g.get("durum") == "tamamlandi" else f"{Fore.CYAN}○{Style.RESET_ALL}"
+                    oncelik_g = _oncelik_str(g.get("oncelik", "normal"))
+                    etiket_g = f"  {Fore.MAGENTA}#{g['etiketler']}{Style.RESET_ALL}" if g.get("etiketler") else ""
+                    print(f"  [{durum}] {sira}. {g['baslik']}  {oncelik_g}{etiket_g}")
+                print()
 
         elif secim == "0":
             print(f"{Fore.CYAN}Görüşürüz!{Style.RESET_ALL}")

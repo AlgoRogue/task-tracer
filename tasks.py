@@ -154,6 +154,26 @@ def gorev_aktife_al(gorev_id):
     return etkilenen > 0
 
 
+def gorev_ara(q=None, oncelik=None, etiket=None):
+    """Başlık, öncelik ve etiket kombinasyonuyla görev ara (arşivlenenler hariç)."""
+    _init_db()
+    kosullar = ["durum != 'arsivlendi'"]
+    parametreler = []
+    if q:
+        kosullar.append("baslik LIKE ?")
+        parametreler.append(f"%{q}%")
+    if oncelik:
+        kosullar.append("oncelik = ?")
+        parametreler.append(oncelik)
+    if etiket:
+        kosullar.append("(',' || etiketler || ',' LIKE ?)")
+        parametreler.append(f"%,{etiket},%")
+    sorgu = "SELECT * FROM gorevler WHERE " + " AND ".join(kosullar) + " ORDER BY id"
+    with _baglan() as con:
+        rows = con.execute(sorgu, parametreler).fetchall()
+    return [dict(r) for r in rows]
+
+
 def etiketlere_gore_filtrele(etiket):
     """Belirli etikete sahip aktif/tamamlanmış görevleri döndür."""
     _init_db()
