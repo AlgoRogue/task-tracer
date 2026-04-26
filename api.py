@@ -1,3 +1,4 @@
+import json
 import os
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -13,6 +14,7 @@ from tasks import (
     bildirimleri_yukle, bildirimi_goruldu_isaretle,
     gunluk_skor_getir, skor_gecmisini_getir,
     ajan_olaylarini_getir,
+    desen_ekle, desen_onayla, desen_reddet, desen_bul,
 )
 from agents import run_all_agents, run_agent
 
@@ -167,3 +169,88 @@ def ajanlari_calistir(veri: AjanCalistirGirdisi):
 @app.get("/ajanlar/olaylar")
 def ajan_olaylari_getir(ajan_adi: Optional[str] = None, limit: int = 50):
     return ajan_olaylarini_getir(ajan_adi=ajan_adi, limit=limit)
+
+
+# --- NL pipeline ---
+
+def _eylemi_uygula(yorum: dict):
+    """Yorumdaki niyete göre görevi oluşturur veya durumunu değiştirir."""
+    niyet = yorum.get("niyet")
+    if niyet == "gorev_ekle":
+        baslik = (yorum.get("baslik") or "").strip()
+        if not baslik:
+            return None
+        etiketler = yorum.get("etiketler") or []
+        return gorev_ekle(
+            baslik,
+            yorum.get("oncelik", "normal"),
+            yorum.get("tarih"),
+            etiketler if etiketler else None,
+        )
+    if niyet == "gorev_tamamla":
+        hedef = yorum.get("hedef_id")
+        if hedef:
+            gorev_tamamla(hedef)
+    elif niyet == "gorev_arsivle":
+        hedef = yorum.get("hedef_id")
+        if hedef:
+            gorev_arsivle(hedef)
+    return None
+
+
+class NLGirdisi(BaseModel):
+    girdi: str
+
+
+class GeriBildirimGirdisi(BaseModel):
+    desen_id: int
+    onay: bool
+
+
+@app.post("/nl/yorumla")
+def nl_yorumla(veri: NLGirdisi):
+    """
+    Doğal dil girdisini yorumlar.
+    - direkt_uygula: aksiyonu hemen çalıştırır
+    - onay_iste: desen_id döner, /nl/geri-bildirim beklenir
+    - acikla: kullanıcıdan netleştirme istenir
+    """
+    from agents.giris import GirisAjan
+    karar = GirisAjan().yorumla_nl(veri.girdi)
+    eylem = karar["eylem"]
+    yorum = karar["yorum"]
+    sonuc = {"eylem": eylem, "mesaj": karar.get("mesaj"), "yorum": yorum}
+
+    if eylem == "direkt_uygula":
+        gorev = _eylemi_uygula(yorum)
+        if gorev:
+            sonuc["gorev"] = gorev
+        desen_id = yorum.get("_desen_id")
+        if desen_id:
+            desen_onayla(desen_id)
+
+    elif eylem == "onay_iste":
+        desen_id = yorum.get("_desen_id")
+        if not desen_id:
+            niyet_dict = {k: v for k, v in yorum.items() if not k.startswith("_")}
+            desen_id = desen_ekle(veri.girdi, niyet_dict, guven=yorum.get("guven", 0.5))
+        sonuc["desen_id"] = desen_id
+
+    return sonuc
+
+
+@app.post("/nl/geri-bildirim")
+def nl_geri_bildirim(veri: GeriBildirimGirdisi):
+    """Kullanıcının onay/red kararını desen hafızasına yazar ve aksiyonu çalıştırır."""
+    if veri.onay:
+        if not desen_onayla(veri.desen_id):
+            raise HTTPException(status_code=404, detail="Desen bulunamadı")
+        desen = desen_bul(veri.desen_id)
+        if desen:
+            niyet_dict = json.loads(desen["niyet"])
+            gorev = _eylemi_uygula(niyet_dict)
+            return {"ok": True, "gorev": gorev}
+    else:
+        if not desen_reddet(veri.desen_id):
+            raise HTTPException(status_code=404, detail="Desen bulunamadı")
+    return {"ok": True}

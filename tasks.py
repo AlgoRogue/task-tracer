@@ -506,6 +506,13 @@ def desen_reddet(desen_id):
     return True
 
 
+def desen_bul(desen_id: int):
+    _init_db()
+    with _baglan() as con:
+        row = con.execute("SELECT * FROM desen_hafizasi WHERE id = ?", (desen_id,)).fetchone()
+    return dict(row) if row else None
+
+
 # --- session_context ---
 
 def session_degerini_kaydet(anahtar, deger, oturum_mu=False):

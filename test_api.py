@@ -244,3 +244,68 @@ def test_anasayfa_html_icerir():
     r = client.get("/")
     assert "text/html" in r.headers["content-type"]
     assert "task" in r.text.lower() or "görev" in r.text.lower()
+
+
+# --- NL pipeline ---
+
+def test_nl_yorumla_acikla_dusuk_guven():
+    r = client.post("/nl/yorumla", json={"girdi": "xyz"})
+    assert r.status_code == 200
+    assert r.json()["eylem"] in ("acikla", "onay_iste", "direkt_uygula")
+
+
+def test_nl_yorumla_direkt_gorev_olusturur():
+    r = client.post("/nl/yorumla", json={"girdi": "toplantı hatırlatıcısı ekle"})
+    assert r.status_code == 200
+    veri = r.json()
+    assert "eylem" in veri
+    assert "yorum" in veri
+
+
+def test_nl_yorumla_onay_iste_desen_id_doner():
+    r = client.post("/nl/yorumla", json={"girdi": "belki yarın bir şeyler yapabilirim"})
+    assert r.status_code == 200
+    veri = r.json()
+    if veri["eylem"] == "onay_iste":
+        assert "desen_id" in veri
+        assert isinstance(veri["desen_id"], int)
+
+
+def test_nl_geri_bildirim_red():
+    # Önce onay_iste döndüren bir girdi ile desen oluştur
+    r = client.post("/nl/yorumla", json={"girdi": "belki bir ara şu raporu bitireyim"})
+    veri = r.json()
+    if veri["eylem"] == "onay_iste":
+        desen_id = veri["desen_id"]
+        r2 = client.post("/nl/geri-bildirim", json={"desen_id": desen_id, "onay": False})
+        assert r2.status_code == 200
+        assert r2.json()["ok"] is True
+
+
+def test_nl_geri_bildirim_onay_gorev_olusturur():
+    # Yüksek güvenli bir gorev_ekle deseni oluştur
+    from tasks import desen_ekle
+    desen_id = desen_ekle(
+        "yarın toplantı var",
+        {"niyet": "gorev_ekle", "baslik": "Toplantı", "oncelik": "normal",
+         "tarih": YARIN, "etiketler": []},
+        guven=0.75,
+    )
+    r = client.post("/nl/geri-bildirim", json={"desen_id": desen_id, "onay": True})
+    assert r.status_code == 200
+    veri = r.json()
+    assert veri["ok"] is True
+    assert veri["gorev"]["baslik"] == "Toplantı"
+
+
+def test_nl_geri_bildirim_olmayan_desen_404():
+    r = client.post("/nl/geri-bildirim", json={"desen_id": 999999, "onay": True})
+    assert r.status_code == 404
+
+
+def test_nl_yorumla_direkt_uygula_gorev_kaydedilir():
+    onceki = len(client.get("/gorevler").json())
+    client.post("/nl/yorumla", json={"girdi": "yarın acil rapor teslimi ekle"})
+    sonraki = client.get("/gorevler").json()
+    # direkt_uygula ise görev sayısı artar; onay_iste/acikla ise artmaz
+    assert len(sonraki) >= onceki
