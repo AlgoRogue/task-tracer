@@ -1,7 +1,7 @@
 import re
 from agents.base import TemelAjan
 import tasks
-from nlp import kural_motoru, desen_hafizasi as dh, baglam_cozucu, guven_kapisi
+from nlp import hibrit_yorumlayici, desen_hafizasi as dh, baglam_cozucu, guven_kapisi
 from nlp.session_context import SessionContext
 
 
@@ -44,8 +44,8 @@ class GirisAjan(TemelAjan):
         """
         ctx = context or SessionContext()
 
-        # 1. Kural motoru
-        yorum = kural_motoru.yorumla(girdi)
+        # 1. Hibrit yorumlayıcı (kural motoru + encoder)
+        yorum = hibrit_yorumlayici.yorumla(girdi)
 
         # 2. Desen hafızası ile zenginleştir
         yorum = dh.kural_ile_birlestir(girdi, yorum)

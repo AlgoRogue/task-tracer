@@ -74,6 +74,155 @@ def aktif_olmayan_gorevleri_goster():
     return liste
 
 
+def _gorev_bul_baslikla(anahtar: str) -> list:
+    if not anahtar:
+        return []
+    kucuk = anahtar.lower()
+    return [g for g in gorevleri_yukle() if kucuk in g["baslik"].lower()]
+
+
+def _hedef_sec(yorum: dict) -> "int | None":
+    """tamamla/arsivle için hedef_id çözer: önce başlık eşleştirme, sonra liste."""
+    if yorum.get("hedef_id"):
+        return yorum["hedef_id"]
+
+    anahtar = (yorum.get("baslik") or "").strip()
+    if anahtar:
+        eslesler = _gorev_bul_baslikla(anahtar)
+        if len(eslesler) == 1:
+            print(f"  → '{eslesler[0]['baslik']}' bulundu.")
+            return eslesler[0]["id"]
+        if len(eslesler) > 1:
+            print("  Birden fazla eşleşme:")
+            for i, g in enumerate(eslesler, 1):
+                print(f"    {i}. {g['baslik']}  {_oncelik_str(g.get('oncelik', 'normal'))}")
+            try:
+                secim = int(input("  Hangisi? ").strip())
+                if 1 <= secim <= len(eslesler):
+                    return eslesler[secim - 1]["id"]
+            except ValueError:
+                pass
+
+    gorevleri_goster()
+    try:
+        return sira_no_to_id(int(input("Sıra no: ").strip()))
+    except ValueError:
+        return None
+
+
+def _nl_eylem_uygula(yorum: dict) -> bool:
+    """Yorumdaki niyete göre görevi oluşturur, tamamlar, arşivler veya listeler."""
+    niyet = yorum.get("niyet")
+
+    if niyet == "gorev_ekle":
+        baslik = (yorum.get("baslik") or "").strip()
+        if not baslik:
+            baslik = input("Görev başlığı: ").strip()
+        if not baslik:
+            print(f"{Fore.RED}Başlık boş olamaz.{Style.RESET_ALL}")
+            return False
+        etiketler = yorum.get("etiketler") or []
+        try:
+            g = gorev_ekle(baslik, yorum.get("oncelik", "normal"), yorum.get("tarih"), etiketler or None)
+            tarih_str = f"  {Fore.MAGENTA}→ {g['son_tarih']}{Style.RESET_ALL}" if g.get("son_tarih") else ""
+            print(f"{Fore.GREEN}✓ Eklendi:{Style.RESET_ALL} {g['baslik']}  {_oncelik_str(g['oncelik'])}{tarih_str}")
+        except ValueError as e:
+            print(f"{Fore.RED}Hata:{Style.RESET_ALL} {e}")
+            return False
+        return True
+
+    if niyet == "gorev_tamamla":
+        hedef_id = _hedef_sec(yorum)
+        if hedef_id and gorev_tamamla(hedef_id):
+            print(f"{Fore.GREEN}✓ Tamamlandı.{Style.RESET_ALL}")
+            return True
+        print(f"{Fore.RED}Görev tamamlanamadı.{Style.RESET_ALL}")
+        return False
+
+    if niyet == "gorev_arsivle":
+        hedef_id = _hedef_sec(yorum)
+        if hedef_id and gorev_arsivle(hedef_id):
+            print(f"{Fore.BLUE}✓ Arşivlendi.{Style.RESET_ALL}")
+            return True
+        print(f"{Fore.RED}Görev arşivlenemedi.{Style.RESET_ALL}")
+        return False
+
+    if niyet == "gorev_listele":
+        gorevleri_goster()
+        return True
+
+    if niyet == "gorev_ara":
+        oncelik_f = yorum.get("oncelik")
+        if oncelik_f == "normal":
+            oncelik_f = None
+        etiketler = yorum.get("etiketler") or []
+        sonuclar = gorev_ara(q=yorum.get("baslik"), oncelik=oncelik_f, etiket=etiketler[0] if etiketler else None)
+        if not sonuclar:
+            print("Sonuç bulunamadı.")
+        else:
+            print(f"\n--- SONUÇLAR ({len(sonuclar)}) ---")
+            for i, g in enumerate(sonuclar, 1):
+                print(f"  {i}. {g['baslik']}  {_oncelik_str(g.get('oncelik', 'normal'))}")
+            print()
+        return True
+
+    return False
+
+
+def nl_modu():
+    from agents.giris import GirisAjan
+    import tasks as _t
+
+    print(f"\n{Fore.CYAN}=== DOĞAL DİL MODU ==={Style.RESET_ALL}")
+    print("Serbest yazın. Çıkmak için 'çıkış' yazın.\n")
+
+    ajan = GirisAjan()
+    while True:
+        try:
+            girdi = input(f"{Fore.CYAN}Sen:{Style.RESET_ALL} ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+
+        if not girdi:
+            continue
+        if girdi.lower() in ("çıkış", "cikis", "exit", "q"):
+            break
+
+        karar = ajan.yorumla_nl(girdi)
+        eylem  = karar["eylem"]
+        yorum  = karar["yorum"]
+        desen_id = yorum.get("_desen_id")
+
+        if eylem == "acikla":
+            print(f"{Fore.YELLOW}{karar['mesaj']}{Style.RESET_ALL}\n")
+            continue
+
+        if eylem == "onay_iste":
+            print(f"{Fore.CYAN}{karar['mesaj']}{Style.RESET_ALL}")
+            try:
+                yanit = input(": ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                break
+            if not desen_id:
+                niyet_dict = {k: v for k, v in yorum.items() if not k.startswith("_")}
+                desen_id = _t.desen_ekle(girdi, niyet_dict, guven=yorum.get("guven", 0.5))
+            if yanit in ("e", "evet", "yes", "y"):
+                _t.desen_onayla(desen_id)
+                _nl_eylem_uygula(yorum)
+            else:
+                _t.desen_reddet(desen_id)
+                print("Anlaşıldı.\n")
+            continue
+
+        # direkt_uygula
+        if desen_id:
+            _t.desen_onayla(desen_id)
+        _nl_eylem_uygula(yorum)
+        print()
+
+
 def menu():
     print(f"\n{Fore.CYAN}=== GÖREV YÖNETİCİSİ ==={Style.RESET_ALL}")
     print("1. Görev ekle")
@@ -85,6 +234,7 @@ def menu():
     print("7. Arşivden kalıcı sil")
     print("8. Görevi düzenle")
     print("9. Görev ara / filtrele")
+    print(f"{Fore.CYAN}n. Doğal dil modu{Style.RESET_ALL}")
     print("0. Çıkış")
     return input("Seçim: ").strip()
 
@@ -204,6 +354,9 @@ def main():
                     etiket_g = f"  {Fore.MAGENTA}#{g['etiketler']}{Style.RESET_ALL}" if g.get("etiketler") else ""
                     print(f"  [{durum}] {sira}. {g['baslik']}  {oncelik_g}{etiket_g}")
                 print()
+
+        elif secim == "n":
+            nl_modu()
 
         elif secim == "0":
             print(f"{Fore.CYAN}Görüşürüz!{Style.RESET_ALL}")
