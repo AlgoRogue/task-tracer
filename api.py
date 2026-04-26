@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import Optional
 from tasks import (
     gorev_ekle, gorev_tamamla, gorev_arsivle,
-    gorev_aktife_al, gorevleri_yukle, arsivi_yukle,
+    gorev_aktife_al, gorev_sil, gorevleri_yukle, arsivi_yukle,
     bugunun_gorevleri, gecmis_gorevler, yaklasan_gorevler
 )
 
@@ -47,6 +47,16 @@ def gorevi_arsivle(gorev_id: int):
 def gorevi_aktife_al(gorev_id: int):
     if not gorev_aktife_al(gorev_id):
         raise HTTPException(status_code=404, detail="Görev bulunamadı")
+    return {"ok": True}
+
+
+@app.delete("/gorevler/{gorev_id}")
+def gorevi_sil(gorev_id: int):
+    try:
+        if not gorev_sil(gorev_id):
+            raise HTTPException(status_code=404, detail="Görev bulunamadı")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     return {"ok": True}
 
 

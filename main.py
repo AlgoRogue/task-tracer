@@ -1,4 +1,4 @@
-from tasks import gorev_ekle, gorev_tamamla, gorev_arsivle, gorev_aktife_al, gorevleri_yukle, arsivi_yukle
+from tasks import gorev_ekle, gorev_tamamla, gorev_arsivle, gorev_aktife_al, gorev_sil, gorevleri_yukle, arsivi_yukle
 
 
 def sira_no_to_id(sira_no):
@@ -59,6 +59,7 @@ def menu():
     print("4. Görevleri listele")
     print("5. Arşivi görüntüle")
     print("6. Görevi aktife al")
+    print("7. Arşivden kalıcı sil")
     print("0. Çıkış")
     return input("Seçim: ").strip()
 
@@ -120,6 +121,25 @@ def main():
                         gorev_id = liste[sira - 1]["id"]
                         if gorev_aktife_al(gorev_id):
                             print("Görev aktife alındı.")
+                    else:
+                        print("Geçersiz sıra numarası.")
+                except ValueError:
+                    print("Geçersiz giriş.")
+
+        elif secim == "7":
+            arsivi_goster()
+            arsiv = arsivi_yukle()
+            if arsiv:
+                try:
+                    sira = int(input("Kalıcı silinecek görev sıra no: "))
+                    if 1 <= sira <= len(arsiv):
+                        gorev_id = arsiv[sira - 1]["id"]
+                        onay = input(f"'{arsiv[sira-1]['baslik']}' kalıcı silinsin mi? (e/h): ").strip().lower()
+                        if onay == "e":
+                            gorev_sil(gorev_id)
+                            print("Görev kalıcı olarak silindi.")
+                        else:
+                            print("İptal edildi.")
                     else:
                         print("Geçersiz sıra numarası.")
                 except ValueError:

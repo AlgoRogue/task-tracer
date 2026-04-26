@@ -3,6 +3,7 @@ import pytest
 from datetime import date, timedelta
 from tasks import (
     gorev_ekle, gorev_tamamla, gorev_arsivle, gorev_aktife_al,
+    gorev_sil,
     gorevleri_yukle, arsivi_yukle,
     bugunun_gorevleri, gecmis_gorevler, yaklasan_gorevler,
     DB
@@ -275,6 +276,42 @@ def test_yaklasan_gorevler():
     gorev_ekle("3 gün sonra",  son_tarih=str(date.today() + timedelta(days=3)))
     gorev_ekle("10 gün sonra", son_tarih=str(date.today() + timedelta(days=10)))
     assert len(yaklasan_gorevler(gun=7)) == 2
+
+
+# --- gorev_sil testleri ---
+
+def test_arsivlenmis_gorev_silinebilir():
+    gorev = gorev_ekle("Silinecek görev")
+    gorev_arsivle(gorev["id"])
+    sonuc = gorev_sil(gorev["id"])
+    assert sonuc == True
+    assert arsivi_yukle() == []
+
+
+def test_aktif_gorev_silinemez():
+    gorev = gorev_ekle("Aktif görev")
+    with pytest.raises(ValueError):
+        gorev_sil(gorev["id"])
+
+
+def test_tamamlanan_gorev_silinemez():
+    gorev = gorev_ekle("Tamamlanan görev")
+    gorev_tamamla(gorev["id"])
+    with pytest.raises(ValueError):
+        gorev_sil(gorev["id"])
+
+
+def test_olmayan_gorev_silinemez():
+    sonuc = gorev_sil(999)
+    assert sonuc == False
+
+
+def test_silinen_gorev_listede_kalmaz():
+    gorev = gorev_ekle("Silinecek")
+    gorev_arsivle(gorev["id"])
+    gorev_sil(gorev["id"])
+    assert arsivi_yukle() == []
+    assert gorevleri_yukle() == []
 
 
 # --- kenar durum testleri ---

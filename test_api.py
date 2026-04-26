@@ -3,7 +3,7 @@ import pytest
 from datetime import date, timedelta
 from fastapi.testclient import TestClient
 from api import app
-from tasks import DB
+from tasks import DB, gorev_ekle, gorev_arsivle
 
 BUGUN = str(date.today())
 YARIN = str(date.today() + timedelta(days=1))
@@ -138,3 +138,24 @@ def test_yaklasan_endpoint():
     client.post("/gorevler", json={"baslik": "Uzak", "son_tarih": str(date.today() + timedelta(days=30))})
     r = client.get("/gorevler/yaklasan?gun=7")
     assert len(r.json()) == 1
+
+
+# --- DELETE /gorevler/{id} ---
+
+def test_delete_arsivlenmis_gorev_200():
+    gorev = client.post("/gorevler", json={"baslik": "Silinecek"}).json()
+    client.put(f"/gorevler/{gorev['id']}/arsivle")
+    r = client.delete(f"/gorevler/{gorev['id']}")
+    assert r.status_code == 200
+    assert client.get("/arsiv").json() == []
+
+
+def test_delete_aktif_gorev_400():
+    gorev = client.post("/gorevler", json={"baslik": "Aktif görev"}).json()
+    r = client.delete(f"/gorevler/{gorev['id']}")
+    assert r.status_code == 400
+
+
+def test_delete_olmayan_gorev_404():
+    r = client.delete("/gorevler/999")
+    assert r.status_code == 404

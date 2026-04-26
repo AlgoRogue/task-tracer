@@ -150,3 +150,16 @@ def gorev_aktife_al(gorev_id):
             (gorev_id,)
         ).rowcount
     return etkilenen > 0
+
+
+def gorev_sil(gorev_id):
+    """Arşivlenmiş görevi kalıcı olarak sil. Aktif/tamamlanan görevler silinemez."""
+    _init_db()
+    with _baglan() as con:
+        row = con.execute("SELECT durum FROM gorevler WHERE id = ?", (gorev_id,)).fetchone()
+        if row is None:
+            return False
+        if row["durum"] != "arsivlendi":
+            raise ValueError("Sadece arşivlenmiş görevler kalıcı olarak silinebilir.")
+        con.execute("DELETE FROM gorevler WHERE id = ?", (gorev_id,))
+    return True
