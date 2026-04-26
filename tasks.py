@@ -108,6 +108,12 @@ def _init_db():
                 con.executescript(sql)
                 con.execute("INSERT INTO __migrasyon__ (versiyon) VALUES (?)", (versiyon,))
 
+        # Eski şema uyumluluğu: gorevler tablosu etiketler sütunu olmadan
+        # oluşturulmuşsa (v1 IF NOT EXISTS nedeniyle atlandıysa) ekle.
+        mevcut = {r[1] for r in con.execute("PRAGMA table_info(gorevler)").fetchall()}
+        if "etiketler" not in mevcut:
+            con.execute("ALTER TABLE gorevler ADD COLUMN etiketler TEXT")
+
 
 def db_versiyonu():
     """Uygulanmış en yüksek migrasyon versiyonunu döndürür."""
