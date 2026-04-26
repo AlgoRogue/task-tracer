@@ -33,14 +33,15 @@ def _init_db():
                 olusturulma TEXT,
                 tamamlanma  TEXT,
                 arsivlenme  TEXT,
-                son_tarih   TEXT
+                son_tarih   TEXT,
+                etiketler   TEXT
             )
         """)
-        # Mevcut veritabanlarına son_tarih sütununu ekle
-        try:
-            con.execute("ALTER TABLE gorevler ADD COLUMN son_tarih TEXT")
-        except Exception:
-            pass
+        for sutun in ("son_tarih TEXT", "etiketler TEXT"):
+            try:
+                con.execute(f"ALTER TABLE gorevler ADD COLUMN {sutun}")
+            except Exception:
+                pass
 
 
 def gorevleri_yukle():
@@ -101,7 +102,7 @@ def yaklasan_gorevler(gun=7):
     return [dict(r) for r in rows]
 
 
-def gorev_ekle(baslik, oncelik="normal", son_tarih=None):
+def gorev_ekle(baslik, oncelik="normal", son_tarih=None, etiketler=None):
     """Yeni görev ekle ve kaydet."""
     if not baslik or not baslik.strip():
         raise ValueError("Görev başlığı boş olamaz.")
@@ -109,11 +110,12 @@ def gorev_ekle(baslik, oncelik="normal", son_tarih=None):
         raise ValueError("Görev başlığı 200 karakterden uzun olamaz.")
     if oncelik not in GECERLI_ONCELIKLER:
         raise ValueError(f"Geçersiz öncelik: '{oncelik}'. Seçenekler: {GECERLI_ONCELIKLER}")
+    etiket_str = ",".join(etiketler) if etiketler else None
     _init_db()
     with _baglan() as con:
         cur = con.execute(
-            "INSERT INTO gorevler (baslik, oncelik, durum, olusturulma, son_tarih) VALUES (?, ?, 'aktif', ?, ?)",
-            (baslik, oncelik, _simdi(), son_tarih)
+            "INSERT INTO gorevler (baslik, oncelik, durum, olusturulma, son_tarih, etiketler) VALUES (?, ?, 'aktif', ?, ?, ?)",
+            (baslik, oncelik, _simdi(), son_tarih, etiket_str)
         )
         row = con.execute("SELECT * FROM gorevler WHERE id = ?", (cur.lastrowid,)).fetchone()
     return dict(row)
@@ -152,7 +154,21 @@ def gorev_aktife_al(gorev_id):
     return etkilenen > 0
 
 
-def gorev_duzenle(gorev_id, baslik=None, oncelik=None, son_tarih=None):
+def etiketlere_gore_filtrele(etiket):
+    """Belirli etikete sahip aktif/tamamlanmış görevleri döndür."""
+    _init_db()
+    with _baglan() as con:
+        rows = con.execute(
+            """SELECT * FROM gorevler
+               WHERE durum != 'arsivlendi'
+               AND (',' || etiketler || ',' LIKE ? )
+               ORDER BY id""",
+            (f"%,{etiket},%",)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def gorev_duzenle(gorev_id, baslik=None, oncelik=None, son_tarih=None, etiketler=None):
     """Görevin alanlarını kısmen güncelle. Güncellenmiş görevi döndürür; ID bulunamazsa None."""
     if baslik is not None:
         if not baslik or not baslik.strip():
@@ -166,12 +182,13 @@ def gorev_duzenle(gorev_id, baslik=None, oncelik=None, son_tarih=None):
         row = con.execute("SELECT * FROM gorevler WHERE id = ?", (gorev_id,)).fetchone()
         if row is None:
             return None
-        yeni_baslik  = baslik   if baslik   is not None else row["baslik"]
-        yeni_oncelik = oncelik  if oncelik  is not None else row["oncelik"]
-        yeni_tarih   = son_tarih if son_tarih is not None else row["son_tarih"]
+        yeni_baslik   = baslik    if baslik    is not None else row["baslik"]
+        yeni_oncelik  = oncelik   if oncelik   is not None else row["oncelik"]
+        yeni_tarih    = son_tarih if son_tarih is not None else row["son_tarih"]
+        yeni_etiketler = ",".join(etiketler) if etiketler is not None else row["etiketler"]
         con.execute(
-            "UPDATE gorevler SET baslik = ?, oncelik = ?, son_tarih = ? WHERE id = ?",
-            (yeni_baslik, yeni_oncelik, yeni_tarih, gorev_id)
+            "UPDATE gorevler SET baslik = ?, oncelik = ?, son_tarih = ?, etiketler = ? WHERE id = ?",
+            (yeni_baslik, yeni_oncelik, yeni_tarih, yeni_etiketler, gorev_id)
         )
         updated = con.execute("SELECT * FROM gorevler WHERE id = ?", (gorev_id,)).fetchone()
     return dict(updated)

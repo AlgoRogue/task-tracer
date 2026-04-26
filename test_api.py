@@ -192,3 +192,19 @@ def test_guncelle_gecersiz_oncelik_422():
 def test_guncelle_olmayan_gorev_404():
     r = client.patch("/gorevler/999", json={"baslik": "Bir şey"})
     assert r.status_code == 404
+
+
+# --- etiket endpoint ---
+
+def test_gorev_etiketle_olustur():
+    r = client.post("/gorevler", json={"baslik": "Etiketli", "etiketler": ["iş", "acil"]})
+    assert r.status_code == 201
+    assert "iş" in r.json()["etiketler"]
+
+
+def test_etiket_filtre_endpoint():
+    client.post("/gorevler", json={"baslik": "İş görevi", "etiketler": ["iş"]})
+    client.post("/gorevler", json={"baslik": "Kişisel", "etiketler": ["kişisel"]})
+    r = client.get("/gorevler?etiket=iş")
+    assert len(r.json()) == 1
+    assert r.json()[0]["baslik"] == "İş görevi"

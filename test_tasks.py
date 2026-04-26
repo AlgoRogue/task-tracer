@@ -3,7 +3,7 @@ import pytest
 from datetime import date, timedelta
 from tasks import (
     gorev_ekle, gorev_tamamla, gorev_arsivle, gorev_aktife_al,
-    gorev_sil, gorev_duzenle,
+    gorev_sil, gorev_duzenle, etiketlere_gore_filtrele,
     gorevleri_yukle, arsivi_yukle,
     bugunun_gorevleri, gecmis_gorevler, yaklasan_gorevler,
     DB
@@ -365,6 +365,47 @@ def test_duzenle_bos_baslik():
 def test_duzenle_olmayan_id():
     sonuc = gorev_duzenle(999, baslik="Bir şey")
     assert sonuc is None
+
+
+# --- etiket testleri ---
+
+def test_etiketle_gorev_olustur():
+    gorev = gorev_ekle("İş toplantısı", etiketler=["iş", "toplantı"])
+    assert gorev["etiketler"] == "iş,toplantı"
+
+
+def test_etiketsiz_gorev_olustur():
+    gorev = gorev_ekle("Sıradan görev")
+    assert gorev["etiketler"] is None or gorev["etiketler"] == ""
+
+
+def test_birden_fazla_etiket():
+    gorev = gorev_ekle("Çok etiketli", etiketler=["a", "b", "c"])
+    assert "a" in gorev["etiketler"]
+    assert "b" in gorev["etiketler"]
+    assert "c" in gorev["etiketler"]
+
+
+def test_etikete_gore_filtrele():
+    gorev_ekle("İş görevi", etiketler=["iş"])
+    gorev_ekle("Kişisel görev", etiketler=["kişisel"])
+    gorev_ekle("Etiketsiz")
+    sonuclar = etiketlere_gore_filtrele("iş")
+    assert len(sonuclar) == 1
+    assert sonuclar[0]["baslik"] == "İş görevi"
+
+
+def test_etiket_guncelleme():
+    gorev = gorev_ekle("Görev")
+    guncellendi = gorev_duzenle(gorev["id"], etiketler=["yeni", "etiket"])
+    assert "yeni" in guncellendi["etiketler"]
+
+
+def test_etiket_filtre_arsivlenenleri_getirmez():
+    g = gorev_ekle("Arşivlenecek", etiketler=["test"])
+    gorev_arsivle(g["id"])
+    sonuclar = etiketlere_gore_filtrele("test")
+    assert len(sonuclar) == 0
 
 
 # --- renkli CLI smoke testi ---

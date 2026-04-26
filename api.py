@@ -1,9 +1,9 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import Optional, Any
+from typing import Optional, List
 from tasks import (
     gorev_ekle, gorev_tamamla, gorev_arsivle,
-    gorev_aktife_al, gorev_sil, gorev_duzenle,
+    gorev_aktife_al, gorev_sil, gorev_duzenle, etiketlere_gore_filtrele,
     gorevleri_yukle, arsivi_yukle,
     bugunun_gorevleri, gecmis_gorevler, yaklasan_gorevler
 )
@@ -15,23 +15,27 @@ class GorevGirdisi(BaseModel):
     baslik: str
     oncelik: str = "normal"
     son_tarih: Optional[str] = None
+    etiketler: Optional[List[str]] = None
 
 
 class GorevGuncelleme(BaseModel):
     baslik: Optional[str] = None
     oncelik: Optional[str] = None
     son_tarih: Optional[str] = None
+    etiketler: Optional[List[str]] = None
 
 
 @app.get("/gorevler")
-def gorevleri_listele():
+def gorevleri_listele(etiket: Optional[str] = None):
+    if etiket:
+        return etiketlere_gore_filtrele(etiket)
     return gorevleri_yukle()
 
 
 @app.post("/gorevler", status_code=201)
 def gorev_olustur(veri: GorevGirdisi):
     try:
-        return gorev_ekle(veri.baslik, veri.oncelik, veri.son_tarih)
+        return gorev_ekle(veri.baslik, veri.oncelik, veri.son_tarih, veri.etiketler)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
@@ -60,7 +64,7 @@ def gorevi_aktife_al(gorev_id: int):
 @app.patch("/gorevler/{gorev_id}")
 def gorevi_guncelle(gorev_id: int, veri: GorevGuncelleme):
     try:
-        guncellendi = gorev_duzenle(gorev_id, veri.baslik, veri.oncelik, veri.son_tarih)
+        guncellendi = gorev_duzenle(gorev_id, veri.baslik, veri.oncelik, veri.son_tarih, veri.etiketler)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     if guncellendi is None:
