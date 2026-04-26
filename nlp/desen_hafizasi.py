@@ -52,7 +52,11 @@ def kural_ile_birlestir(girdi: str, kural_yorumu: dict) -> dict:
     desen_guven = eslesme["guven"]
     desen_niyet = json.loads(eslesme["niyet"])
 
-    if ben >= 0.9:
+    kural_niyet = kural_yorumu.get("niyet")
+    desen_niyet_str = desen_niyet.get("niyet")
+
+    if ben >= 0.9 and desen_niyet_str == kural_niyet:
+        # Yüksek benzerlik ve aynı niyet → desen hafızası kazanır
         return {
             **kural_yorumu,
             **desen_niyet,
@@ -61,10 +65,14 @@ def kural_ile_birlestir(girdi: str, kural_yorumu: dict) -> dict:
             "_desen_id": eslesme["id"],
         }
 
-    # Orta benzerlik: güven ortalaması, niyet kural motorundan gelir
-    karisik_guven = round((kural_yorumu["guven"] + desen_guven * ben) / 2, 4)
-    return {
-        **kural_yorumu,
-        "guven": karisik_guven,
-        "_desen_id": eslesme["id"],
-    }
+    if desen_niyet_str == kural_niyet:
+        # Orta benzerlik, aynı niyet → güven ortalaması alınır
+        karisik_guven = round((kural_yorumu["guven"] + desen_guven * ben) / 2, 4)
+        return {
+            **kural_yorumu,
+            "guven": karisik_guven,
+            "_desen_id": eslesme["id"],
+        }
+
+    # Niyet farklı → kural motoru sonucu korunur, desen_id eklenir
+    return {**kural_yorumu, "_desen_id": eslesme["id"]}

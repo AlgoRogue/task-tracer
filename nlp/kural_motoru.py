@@ -42,11 +42,13 @@ _NIYET_TAMAMLA = [
 ]
 _NIYET_ARSIVLE = ["arşivlendi", "arşivle", "iptal et", "iptal", "kaldır"]
 _NIYET_LISTELE = [
-    "tümünü göster", "hepsini göster", "listele", "göster",
-    "liste", "ne var", "neler var",
+    "tümünü göster", "hepsini göster", "listele", "göster", "goster",
+    "liste", "ne var", "neler var", "neler vardi", "ne vardi",
+    "hatirlat", "hatırlat", "ne yapacaktim", "ne yapacaktım",
+    "ne yapmaliyim", "ne yapmalıyım",
 ]
 _NIYET_ARA = ["filtrele", "search", "hangi", "bul", "ara"]
-_NIYET_EKLE = ["ekle", "oluştur", "hatırlat", "unutma", "not al", "kaydet", "yap"]
+_NIYET_EKLE = ["ekle", "oluştur", "olustur", "hatırla", "unutma", "not al", "kaydet", "yap"]
 
 
 # --- yardımcı fonksiyonlar ---
@@ -84,15 +86,15 @@ def _tarih_cikart(metin_lower: str, ref: date):
             pass
 
     # Bugün
-    if re.search(r'\b(bugün|bu gün)\b', metin_lower):
+    if re.search(r'\b(bugün|bu gün|bugun|bu gun)\b', metin_lower):
         return (str(ref), "bugün")
 
     # Yarın
-    if re.search(r'\byarın\b', metin_lower):
+    if re.search(r'\byar[ıi]n\b', metin_lower):
         return (str(ref + timedelta(days=1)), "yarın")
 
     # Öbür gün
-    if re.search(r'\b(öbür gün|öbürgün)\b', metin_lower):
+    if re.search(r'\b([öo]b[üu]r g[üu]n|[öo]b[üu]rg[üu]n)\b', metin_lower):
         return (str(ref + timedelta(days=2)), "öbür gün")
 
     # N gün sonra
@@ -107,15 +109,15 @@ def _tarih_cikart(metin_lower: str, ref: date):
         return (str(ref + timedelta(weeks=_sayi_cevir(m.group(1)))), m.group(0))
 
     # Hafta sonu → Cumartesi
-    if re.search(r'\b(hafta sonu|haftasonu)\b', metin_lower):
+    if re.search(r'\b(hafta sonu|haftasonu|hafta sonu|haftasonu)\b', metin_lower):
         return (str(_sonraki_gun(ref, 5)), "hafta sonu")
 
     # Gelecek hafta / önümüzdeki hafta → gelecek Pazartesi
-    if re.search(r'\b(gelecek hafta|önümüzdeki hafta)\b', metin_lower):
+    if re.search(r'\b(gelecek hafta|[öo]n[üu]m[üu]zdeki hafta)\b', metin_lower):
         return (str(ref + timedelta(days=7 - ref.weekday())), "gelecek hafta")
 
     # Bu hafta → bu haftanın Cuması
-    if re.search(r'\b(bu hafta|bu haftaya kadar|bu hafta içinde)\b', metin_lower):
+    if re.search(r'\b(bu hafta|bu haftaya kadar|bu hafta i[çc]inde)\b', metin_lower):
         fark = (4 - ref.weekday()) % 7 or 7
         return (str(ref + timedelta(days=fark)), "bu hafta")
 
