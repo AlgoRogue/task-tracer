@@ -159,3 +159,36 @@ def test_delete_aktif_gorev_400():
 def test_delete_olmayan_gorev_404():
     r = client.delete("/gorevler/999")
     assert r.status_code == 404
+
+
+# --- PATCH /gorevler/{id} ---
+
+def test_baslik_guncelle():
+    gorev = client.post("/gorevler", json={"baslik": "Eski"}).json()
+    r = client.patch(f"/gorevler/{gorev['id']}", json={"baslik": "Yeni"})
+    assert r.status_code == 200
+    assert r.json()["baslik"] == "Yeni"
+
+
+def test_oncelik_guncelle():
+    gorev = client.post("/gorevler", json={"baslik": "Görev", "oncelik": "normal"}).json()
+    r = client.patch(f"/gorevler/{gorev['id']}", json={"oncelik": "yuksek"})
+    assert r.status_code == 200
+    assert r.json()["oncelik"] == "yuksek"
+
+
+def test_guncelleme_diger_alanlar_korunur():
+    gorev = client.post("/gorevler", json={"baslik": "Test", "oncelik": "dusuk"}).json()
+    r = client.patch(f"/gorevler/{gorev['id']}", json={"baslik": "Yeni ad"})
+    assert r.json()["oncelik"] == "dusuk"
+
+
+def test_guncelle_gecersiz_oncelik_422():
+    gorev = client.post("/gorevler", json={"baslik": "Görev"}).json()
+    r = client.patch(f"/gorevler/{gorev['id']}", json={"oncelik": "uydurma"})
+    assert r.status_code == 422
+
+
+def test_guncelle_olmayan_gorev_404():
+    r = client.patch("/gorevler/999", json={"baslik": "Bir şey"})
+    assert r.status_code == 404

@@ -152,6 +152,31 @@ def gorev_aktife_al(gorev_id):
     return etkilenen > 0
 
 
+def gorev_duzenle(gorev_id, baslik=None, oncelik=None, son_tarih=None):
+    """Görevin alanlarını kısmen güncelle. Güncellenmiş görevi döndürür; ID bulunamazsa None."""
+    if baslik is not None:
+        if not baslik or not baslik.strip():
+            raise ValueError("Görev başlığı boş olamaz.")
+        if len(baslik) > 200:
+            raise ValueError("Görev başlığı 200 karakterden uzun olamaz.")
+    if oncelik is not None and oncelik not in GECERLI_ONCELIKLER:
+        raise ValueError(f"Geçersiz öncelik: '{oncelik}'. Seçenekler: {GECERLI_ONCELIKLER}")
+    _init_db()
+    with _baglan() as con:
+        row = con.execute("SELECT * FROM gorevler WHERE id = ?", (gorev_id,)).fetchone()
+        if row is None:
+            return None
+        yeni_baslik  = baslik   if baslik   is not None else row["baslik"]
+        yeni_oncelik = oncelik  if oncelik  is not None else row["oncelik"]
+        yeni_tarih   = son_tarih if son_tarih is not None else row["son_tarih"]
+        con.execute(
+            "UPDATE gorevler SET baslik = ?, oncelik = ?, son_tarih = ? WHERE id = ?",
+            (yeni_baslik, yeni_oncelik, yeni_tarih, gorev_id)
+        )
+        updated = con.execute("SELECT * FROM gorevler WHERE id = ?", (gorev_id,)).fetchone()
+    return dict(updated)
+
+
 def gorev_sil(gorev_id):
     """Arşivlenmiş görevi kalıcı olarak sil. Aktif/tamamlanan görevler silinemez."""
     _init_db()

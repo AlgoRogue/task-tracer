@@ -3,7 +3,7 @@ import pytest
 from datetime import date, timedelta
 from tasks import (
     gorev_ekle, gorev_tamamla, gorev_arsivle, gorev_aktife_al,
-    gorev_sil,
+    gorev_sil, gorev_duzenle,
     gorevleri_yukle, arsivi_yukle,
     bugunun_gorevleri, gecmis_gorevler, yaklasan_gorevler,
     DB
@@ -312,6 +312,59 @@ def test_silinen_gorev_listede_kalmaz():
     gorev_sil(gorev["id"])
     assert arsivi_yukle() == []
     assert gorevleri_yukle() == []
+
+
+# --- gorev_duzenle testleri ---
+
+def test_baslik_duzenle():
+    gorev = gorev_ekle("Eski başlık")
+    guncellendi = gorev_duzenle(gorev["id"], baslik="Yeni başlık")
+    assert guncellendi["baslik"] == "Yeni başlık"
+
+
+def test_oncelik_duzenle():
+    gorev = gorev_ekle("Bir görev", oncelik="normal")
+    guncellendi = gorev_duzenle(gorev["id"], oncelik="yuksek")
+    assert guncellendi["oncelik"] == "yuksek"
+
+
+def test_son_tarih_duzenle():
+    gorev = gorev_ekle("Tarihli görev")
+    guncellendi = gorev_duzenle(gorev["id"], son_tarih="2030-01-01")
+    assert guncellendi["son_tarih"] == "2030-01-01"
+
+
+def test_kismi_guncelleme_diger_alanlar_korunur():
+    gorev = gorev_ekle("Başlık", oncelik="yuksek", son_tarih="2030-06-01")
+    guncellendi = gorev_duzenle(gorev["id"], baslik="Yeni başlık")
+    assert guncellendi["oncelik"] == "yuksek"
+    assert guncellendi["son_tarih"] == "2030-06-01"
+    assert guncellendi["durum"] == "aktif"
+
+
+def test_tamamlanmis_gorev_duzenlenebilir():
+    gorev = gorev_ekle("Eski")
+    gorev_tamamla(gorev["id"])
+    guncellendi = gorev_duzenle(gorev["id"], baslik="Güncellendi")
+    assert guncellendi["baslik"] == "Güncellendi"
+    assert guncellendi["durum"] == "tamamlandi"
+
+
+def test_duzenle_gecersiz_oncelik():
+    gorev = gorev_ekle("Görev")
+    with pytest.raises(ValueError):
+        gorev_duzenle(gorev["id"], oncelik="cok_acil")
+
+
+def test_duzenle_bos_baslik():
+    gorev = gorev_ekle("Görev")
+    with pytest.raises(ValueError):
+        gorev_duzenle(gorev["id"], baslik="")
+
+
+def test_duzenle_olmayan_id():
+    sonuc = gorev_duzenle(999, baslik="Bir şey")
+    assert sonuc is None
 
 
 # --- renkli CLI smoke testi ---

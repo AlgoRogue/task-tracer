@@ -1,9 +1,10 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Any
 from tasks import (
     gorev_ekle, gorev_tamamla, gorev_arsivle,
-    gorev_aktife_al, gorev_sil, gorevleri_yukle, arsivi_yukle,
+    gorev_aktife_al, gorev_sil, gorev_duzenle,
+    gorevleri_yukle, arsivi_yukle,
     bugunun_gorevleri, gecmis_gorevler, yaklasan_gorevler
 )
 
@@ -13,6 +14,12 @@ app = FastAPI(title="Task Tracer API")
 class GorevGirdisi(BaseModel):
     baslik: str
     oncelik: str = "normal"
+    son_tarih: Optional[str] = None
+
+
+class GorevGuncelleme(BaseModel):
+    baslik: Optional[str] = None
+    oncelik: Optional[str] = None
     son_tarih: Optional[str] = None
 
 
@@ -48,6 +55,17 @@ def gorevi_aktife_al(gorev_id: int):
     if not gorev_aktife_al(gorev_id):
         raise HTTPException(status_code=404, detail="Görev bulunamadı")
     return {"ok": True}
+
+
+@app.patch("/gorevler/{gorev_id}")
+def gorevi_guncelle(gorev_id: int, veri: GorevGuncelleme):
+    try:
+        guncellendi = gorev_duzenle(gorev_id, veri.baslik, veri.oncelik, veri.son_tarih)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    if guncellendi is None:
+        raise HTTPException(status_code=404, detail="Görev bulunamadı")
+    return guncellendi
 
 
 @app.delete("/gorevler/{gorev_id}")
