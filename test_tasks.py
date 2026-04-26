@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from tasks import (
     gorev_ekle, gorev_tamamla, gorev_arsivle, gorev_aktife_al,
     gorev_sil, gorev_duzenle, etiketlere_gore_filtrele, gorev_ara,
+    db_versiyonu,
     gorevleri_yukle, arsivi_yukle,
     bugunun_gorevleri, gecmis_gorevler, yaklasan_gorevler,
     DB
@@ -458,6 +459,98 @@ def test_arama_arsivlenenleri_getirmez():
 
 def test_renkli_cikti_import_hatasi_vermez():
     import main  # noqa: F401 — modül yüklenebilmeli
+
+
+# ================================================================
+# Temel güçlendirme: validasyon, edge-case, migration
+# ================================================================
+
+# --- son_tarih validasyon testleri ---
+
+def test_gecersiz_tarih_formati_reddedilir():
+    with pytest.raises(ValueError, match="tarih"):
+        gorev_ekle("Görev", son_tarih="yarın")
+
+
+def test_yanlis_ayirac_tarih_reddedilir():
+    with pytest.raises(ValueError, match="tarih"):
+        gorev_ekle("Görev", son_tarih="2030/06/01")
+
+
+def test_mantiksal_gecersiz_tarih_reddedilir():
+    with pytest.raises(ValueError, match="tarih"):
+        gorev_ekle("Görev", son_tarih="2030-13-01")
+
+
+def test_gecerli_tarih_kabul_edilir():
+    gorev = gorev_ekle("Görev", son_tarih="2030-06-15")
+    assert gorev["son_tarih"] == "2030-06-15"
+
+
+def test_none_tarih_kabul_edilir():
+    gorev = gorev_ekle("Görev", son_tarih=None)
+    assert gorev["son_tarih"] is None
+
+
+def test_duzenle_gecersiz_tarih_reddedilir():
+    gorev = gorev_ekle("Görev")
+    with pytest.raises(ValueError, match="tarih"):
+        gorev_duzenle(gorev["id"], son_tarih="abc")
+
+
+# --- etiket validasyon testleri ---
+
+def test_bos_etiketler_filtrelenir():
+    gorev = gorev_ekle("Görev", etiketler=["", " ", "iş"])
+    assert gorev["etiketler"] == "iş"
+
+
+def test_sadece_bos_etiket_listesi_null_kaydeder():
+    gorev = gorev_ekle("Görev", etiketler=["", "  "])
+    assert not gorev["etiketler"]
+
+
+def test_cok_uzun_etiket_reddedilir():
+    with pytest.raises(ValueError, match="[Ee]tiket"):
+        gorev_ekle("Görev", etiketler=["x" * 51])
+
+
+def test_virgul_iceren_etiket_reddedilir():
+    with pytest.raises(ValueError, match="[Ee]tiket"):
+        gorev_ekle("Görev", etiketler=["iş,acil"])
+
+
+# --- gorev_ara edge-case testleri ---
+
+def test_ara_yuzde_karakteri_literal_arar():
+    gorev_ekle("50% indirim")
+    gorev_ekle("Normal görev")
+    sonuclar = gorev_ara(q="50%")
+    assert len(sonuclar) == 1
+    assert "50%" in sonuclar[0]["baslik"]
+
+
+def test_ara_alt_cizgi_literal_arar():
+    gorev_ekle("proje_raporu")
+    gorev_ekle("proje raporu")
+    sonuclar = gorev_ara(q="proje_raporu")
+    assert len(sonuclar) == 1
+
+
+# --- migration / şema versiyon testleri ---
+
+def test_db_versiyonu_pozitif_tam_sayi():
+    gorevleri_yukle()  # DB'yi başlat
+    v = db_versiyonu()
+    assert isinstance(v, int)
+    assert v >= 1
+
+
+def test_db_versiyonu_tekrar_cagrilinca_degismez():
+    gorevleri_yukle()
+    v1 = db_versiyonu()
+    v2 = db_versiyonu()
+    assert v1 == v2
 
 
 # --- kenar durum testleri ---

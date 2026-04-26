@@ -6,6 +6,25 @@ _KLASOR = os.path.dirname(os.path.abspath(__file__))
 DB = os.path.join(_KLASOR, "tasks.db")
 
 GECERLI_ONCELIKLER = ["dusuk", "normal", "yuksek"]
+_ETIKET_MAX_UZUNLUK = 50
+
+# Şema geçmişi: her entry (versiyon, SQL) çiftinden oluşur.
+# Yeni sütun/değişiklik eklemek için buraya satır ekle, başka bir yere dokunma.
+_MIGRASYONLAR = [
+    (1, """
+        CREATE TABLE IF NOT EXISTS gorevler (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            baslik      TEXT    NOT NULL,
+            oncelik     TEXT    NOT NULL DEFAULT 'normal',
+            durum       TEXT    NOT NULL DEFAULT 'aktif',
+            olusturulma TEXT,
+            tamamlanma  TEXT,
+            arsivlenme  TEXT,
+            son_tarih   TEXT,
+            etiketler   TEXT
+        )
+    """),
+]
 
 
 def _simdi():
@@ -25,24 +44,56 @@ def _baglan():
 def _init_db():
     with _baglan() as con:
         con.execute("""
-            CREATE TABLE IF NOT EXISTS gorevler (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                baslik      TEXT    NOT NULL,
-                oncelik     TEXT    NOT NULL DEFAULT 'normal',
-                durum       TEXT    NOT NULL DEFAULT 'aktif',
-                olusturulma TEXT,
-                tamamlanma  TEXT,
-                arsivlenme  TEXT,
-                son_tarih   TEXT,
-                etiketler   TEXT
+            CREATE TABLE IF NOT EXISTS __migrasyon__ (
+                versiyon INTEGER PRIMARY KEY
             )
         """)
-        for sutun in ("son_tarih TEXT", "etiketler TEXT"):
-            try:
-                con.execute(f"ALTER TABLE gorevler ADD COLUMN {sutun}")
-            except Exception:
-                pass
+        uygulananlar = {r[0] for r in con.execute("SELECT versiyon FROM __migrasyon__").fetchall()}
+        for versiyon, sql in _MIGRASYONLAR:
+            if versiyon not in uygulananlar:
+                con.executescript(sql)
+                con.execute("INSERT INTO __migrasyon__ (versiyon) VALUES (?)", (versiyon,))
 
+
+def db_versiyonu():
+    """Uygulanmış en yüksek migrasyon versiyonunu döndürür."""
+    _init_db()
+    with _baglan() as con:
+        row = con.execute("SELECT MAX(versiyon) FROM __migrasyon__").fetchone()
+    return row[0] or 0
+
+
+# --- validasyon yardımcıları ---
+
+def _tarih_dogrula(tarih):
+    """YYYY-MM-DD formatında geçerli bir tarih olmalı; None geçerlidir."""
+    if tarih is None:
+        return
+    try:
+        datetime.strptime(tarih, "%Y-%m-%d")
+    except ValueError:
+        raise ValueError(f"Geçersiz tarih formatı: '{tarih}'. Beklenen: YYYY-MM-DD")
+
+
+def _etiket_dogrula_ve_temizle(etiketler):
+    """Boşlukları filtreler, uzunluk ve virgül kısıtlarını kontrol eder."""
+    if not etiketler:
+        return None
+    temiz = [e.strip() for e in etiketler if e.strip()]
+    for e in temiz:
+        if len(e) > _ETIKET_MAX_UZUNLUK:
+            raise ValueError(f"Etiket çok uzun (max {_ETIKET_MAX_UZUNLUK} karakter): '{e}'")
+        if "," in e:
+            raise ValueError(f"Etiket içinde virgül kullanılamaz: '{e}'")
+    return ",".join(temiz) if temiz else None
+
+
+def _like_kac(metin):
+    """LIKE sorgusunda % ve _ karakterlerini literal olarak eşleştirmek için kaçırır."""
+    return metin.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+# --- public API ---
 
 def gorevleri_yukle():
     """Aktif ve tamamlanmış görevleri döndür (arşivlenenler hariç)."""
@@ -110,7 +161,8 @@ def gorev_ekle(baslik, oncelik="normal", son_tarih=None, etiketler=None):
         raise ValueError("Görev başlığı 200 karakterden uzun olamaz.")
     if oncelik not in GECERLI_ONCELIKLER:
         raise ValueError(f"Geçersiz öncelik: '{oncelik}'. Seçenekler: {GECERLI_ONCELIKLER}")
-    etiket_str = ",".join(etiketler) if etiketler else None
+    _tarih_dogrula(son_tarih)
+    etiket_str = _etiket_dogrula_ve_temizle(etiketler)
     _init_db()
     with _baglan() as con:
         cur = con.execute(
@@ -160,14 +212,14 @@ def gorev_ara(q=None, oncelik=None, etiket=None):
     kosullar = ["durum != 'arsivlendi'"]
     parametreler = []
     if q:
-        kosullar.append("baslik LIKE ?")
-        parametreler.append(f"%{q}%")
+        kosullar.append("baslik LIKE ? ESCAPE '\\'")
+        parametreler.append(f"%{_like_kac(q)}%")
     if oncelik:
         kosullar.append("oncelik = ?")
         parametreler.append(oncelik)
     if etiket:
-        kosullar.append("(',' || etiketler || ',' LIKE ?)")
-        parametreler.append(f"%,{etiket},%")
+        kosullar.append("(',' || etiketler || ',' LIKE ? ESCAPE '\\')")
+        parametreler.append(f"%,{_like_kac(etiket)},%")
     sorgu = "SELECT * FROM gorevler WHERE " + " AND ".join(kosullar) + " ORDER BY id"
     with _baglan() as con:
         rows = con.execute(sorgu, parametreler).fetchall()
@@ -181,9 +233,9 @@ def etiketlere_gore_filtrele(etiket):
         rows = con.execute(
             """SELECT * FROM gorevler
                WHERE durum != 'arsivlendi'
-               AND (',' || etiketler || ',' LIKE ? )
+               AND (',' || etiketler || ',' LIKE ? ESCAPE '\\')
                ORDER BY id""",
-            (f"%,{etiket},%",)
+            (f"%,{_like_kac(etiket)},%",)
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -197,15 +249,17 @@ def gorev_duzenle(gorev_id, baslik=None, oncelik=None, son_tarih=None, etiketler
             raise ValueError("Görev başlığı 200 karakterden uzun olamaz.")
     if oncelik is not None and oncelik not in GECERLI_ONCELIKLER:
         raise ValueError(f"Geçersiz öncelik: '{oncelik}'. Seçenekler: {GECERLI_ONCELIKLER}")
+    if son_tarih is not None:
+        _tarih_dogrula(son_tarih)
     _init_db()
     with _baglan() as con:
         row = con.execute("SELECT * FROM gorevler WHERE id = ?", (gorev_id,)).fetchone()
         if row is None:
             return None
-        yeni_baslik   = baslik    if baslik    is not None else row["baslik"]
-        yeni_oncelik  = oncelik   if oncelik   is not None else row["oncelik"]
-        yeni_tarih    = son_tarih if son_tarih is not None else row["son_tarih"]
-        yeni_etiketler = ",".join(etiketler) if etiketler is not None else row["etiketler"]
+        yeni_baslik    = baslik    if baslik    is not None else row["baslik"]
+        yeni_oncelik   = oncelik   if oncelik   is not None else row["oncelik"]
+        yeni_tarih     = son_tarih if son_tarih is not None else row["son_tarih"]
+        yeni_etiketler = _etiket_dogrula_ve_temizle(etiketler) if etiketler is not None else row["etiketler"]
         con.execute(
             "UPDATE gorevler SET baslik = ?, oncelik = ?, son_tarih = ?, etiketler = ? WHERE id = ?",
             (yeni_baslik, yeni_oncelik, yeni_tarih, yeni_etiketler, gorev_id)
