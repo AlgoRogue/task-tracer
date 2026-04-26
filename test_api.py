@@ -231,3 +231,16 @@ def test_arama_endpoint_bos_hepsini_doner():
     client.post("/gorevler", json={"baslik": "B"})
     r = client.get("/gorevler/ara")
     assert len(r.json()) == 2
+
+
+# --- web arayüzü ---
+
+def test_anasayfa_200_doner():
+    r = client.get("/")
+    assert r.status_code == 200
+
+
+def test_anasayfa_html_icerir():
+    r = client.get("/")
+    assert "text/html" in r.headers["content-type"]
+    assert "task" in r.text.lower() or "görev" in r.text.lower()

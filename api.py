@@ -1,4 +1,7 @@
-from fastapi import FastAPI, HTTPException
+import os
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from typing import Optional, List
 from tasks import (
@@ -10,6 +13,14 @@ from tasks import (
 )
 
 app = FastAPI(title="Task Tracer API")
+
+_TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
+templates = Jinja2Templates(directory=_TEMPLATES_DIR)
+
+
+@app.get("/", response_class=HTMLResponse)
+def anasayfa(request: Request):
+    return templates.TemplateResponse(request=request, name="index.html")
 
 
 class GorevGirdisi(BaseModel):
